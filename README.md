@@ -1,5 +1,5 @@
 # golang_logger
 
-learning golang project
+Logger module
 
-(base logger)
+Fist steps in go
