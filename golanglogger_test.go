@@ -12,7 +12,7 @@ func TestLoggingLevelValue(t *testing.T){
 	if err != nil {
 		t.Error("Error received: " + err.Error())
 	}
-	if v != Debug {
+	if v != DebugLvl {
 		t.Error("Expected \"1\", got", v)
 	}
 }

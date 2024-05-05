@@ -1,24 +1,11 @@
 package golanglogger
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
-)
-
-// logger level enums
-type LoggingLevel int
-
-const (
-	Debug LoggingLevel = iota
-	Info
-	Warning
-	Error
-	definitely
 )
 
 // logger cmd enums
@@ -57,16 +44,20 @@ type logParam struct {
 	fileMbSize int
 	// file duration
 	fileDaySize int
+	// check file delay size period in seconds
+	checkFileTime int
 }
 
 // logger object type
 type Logger struct {
-	// lodders parameters
-	param logParam
+	// logger mutex for param interactions
+	rmu *sync.RWMutex
+	// logger parameters
+	param *logParam
 	// logger channel
 	logChan chan logData
 	// logger counter
-	wg sync.WaitGroup
+	wg *sync.WaitGroup
 }
 
 // create logger w params
@@ -79,16 +70,18 @@ func New(l LoggingLevel) *Logger {
 	log.param.logLvl = l
 	log.logChan = make(chan logData, log.param.lBuf)
 
+	// memorized starting logger
+	log.wg.Add(1)
 	// start new logger
-	go logger(log.logChan, &log.param, &log.wg)
+	go logger(&log)
 	log.Out("Logger starting w log level = " + l.Name())
 
 	return &log
 }
 
 // initializing base parameters (set parameters what not standart init values)
-func getBaseParam() logParam {
-	return logParam{logLvl: Error, lBuf: 20}
+func getBaseParam() *logParam {
+	return &logParam{logLvl: initLogLevel, lBuf: initLogBuffer, checkFileTime: initCheckTime}
 }
 
 // stopping logger
@@ -97,22 +90,12 @@ func (log *Logger) StopLog() {
 	log.wg.Wait()
 }
 
-// returns LoggingLevel const by text value (Error level if wrong name)
-func LoggingLevelValue(s string) (LoggingLevel, error) {
-	if l, ok := map[string]LoggingLevel{"debug": Debug, "info": Info, "warning": Warning, "error": Error}[strings.ToLower(s)]; ok {
-		return l, nil
-	}
-	return Error, errors.New("Wrong LogLevel value: " + s)
-}
-
-// returns LoggingLevel name
-func (l LoggingLevel) Name() string {
-	return strings.ToUpper([]string{"Debug", "Info", "Warning", "Error"}[int(l)])
-}
 
 // set log level
 func (log *Logger) SetLevel(l LoggingLevel) {
+	log.rmu.Lock()
 	log.param.logLvl = l
+	log.rmu.Unlock()
 	writeCmd(log.logChan, cmdReloadConf)
 	log.Out("Set logging level = " + l.Name())
 }
@@ -125,10 +108,12 @@ func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
 		return false
 	}
 
+	log.rmu.Lock()
 	log.param.logFile = logFile
 	log.param.fileOutPath = fPath
 	log.param.fileMbSize = mbSize
 	log.param.fileDaySize = daySize
+	log.rmu.Unlock()
 
 	log.OutDebug("Logger will restart with new file parameters")
 	writeCmd(log.logChan, cmdReloadConf)
@@ -144,8 +129,10 @@ func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 		return false
 	}
 
+	log.rmu.Lock()
 	log.param.fNoCon = !con
 	log.param.fStdErr = stdErr
+	log.rmu.Unlock()
 
 	log.OutDebug("Logger will restart with new outs parameters")
 	writeCmd(log.logChan, cmdReloadConf)
@@ -165,28 +152,32 @@ func writeCmd(c chan<- logData, cmd loggingCmd) {
 
 // out Debug string into log
 func (log *Logger) OutDebug(msg string) {
-	if int(log.param.logLvl) <= int(Debug) {
+	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
+	if int(log.param.logLvl) <= int(DebugLvl) {
 		writeLog(log.logChan, time.Now(), "[DBG]: "+msg)
 	}
 }
 
 // out Info string into log
 func (log *Logger) OutInfo(msg string) {
-	if int(log.param.logLvl) <= int(Info) {
+	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
+	if int(log.param.logLvl) <= int(InfoLvl) {
 		writeLog(log.logChan, time.Now(), "[INF]: "+msg)
 	}
 }
 
 // out Warning string into log
 func (log *Logger) OutWarning(msg string) {
-	if int(log.param.logLvl) <= int(Warning) {
+	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
+	if int(log.param.logLvl) <= int(WarningLvl) {
 		writeLog(log.logChan, time.Now(), "[WRN]: "+msg)
 	}
 }
 
 // out Error string into log
 func (log *Logger) OutError(msg string) {
-	if int(log.param.logLvl) <= int(Error) {
+	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
+	if int(log.param.logLvl) <= int(ErrorLvl) {
 		writeLog(log.logChan, time.Now(), "[ERR]: "+msg)
 	}
 }
@@ -197,124 +188,111 @@ func (log *Logger) Out(msg string) {
 }
 
 // logger goroutine
-func logger(c chan logData, base_param *logParam, wg *sync.WaitGroup) {
+func logger(l *Logger) {
+	// reset memorysed logger when exit
+	defer l.wg.Done()
 
-	wg.Add(1)
-	defer wg.Done()
-	// type for inner errors, what going bypass channel
-	type inner_error struct {
-		t time.Time
-		s string
-	}
-
-	// parameters copy values
-	var param logParam = *base_param
 	// log writer
 	var writer io.Writer
-	// timer for change file by time
-	var tmr *time.Timer
-	// stop func flag
-	var fStop bool = false
-	// change file flag
-	var cCancel chan bool
+
+	// parameters copy values
+	var param logParam
+
+	// stop goroutine check filec hannel
+	var cCancel chan struct{}
 	// current received command
 	var cmd loggingCmd = cmdIdle
+	// message what was generating error in cycle before
+	var lostLogMsg string
+	// error while changing file
+	var procErrorMsg string
 
-	// init bufer for inner functions errors
-	inner_err := []inner_error{}
 
-	// Now base cycle of logger func
-	for !fStop {
-
-		// check file day size control
-		if param.fileDaySize > 0 && param.logFile != nil {
-			const secondInDay = 60 * 60 * 24
-			t, err := getDateTimeFile(param.fileOutPath)
-
-			if err == nil {
-				// time in seconds at day starting for file creating time + size log in seconds
-				fileChangeDaySec := (t / secondInDay) + (int64(param.fileDaySize) * secondInDay)
-				// if time is already gone...
-				if time.Now().Unix() >= fileChangeDaySec {
-					param.logFile, err = changeFile(param.logFile, param.fileOutPath)
-					if err != nil {
-						inner_err = append(inner_err, inner_error{time.Now(), "Error while changing file. Err: " + err.Error()})
-					}
-				}
-
-				// timer to change time from now
-				tmr = time.NewTimer(time.Duration(fileChangeDaySec-time.Now().Unix()) * time.Second)
-
-				cCancel = make(chan bool)
-
-				go func(c_t chan<- logData, t *time.Timer, c_c <- chan bool) {
-					select {
-					case <-t.C:
-						writeCmd(c_t, cmdChangeFile)
-					case <-c_c:
-					}
-				}(c, tmr, cCancel)
-
-			} else {
-				inner_err = append(inner_err, inner_error{time.Now(), "Error while getting datetime creating of file. Err: " + err.Error()})
-			}
-		}
-
-		// check file MB size control
-		if param.fileMbSize > 0 && param.logFile != nil {
-			f, err := getFileMbSize(param.fileOutPath)
-			if err == nil {
-				if f >= param.fileMbSize {
-					param.logFile, err = changeFile(param.logFile, param.fileOutPath)
-					if err != nil {
-						inner_err = append(inner_err, inner_error{time.Now(), "Error while changing file. Err: " + err.Error()})
-					}
-				}
-			} else {
-				inner_err = append(inner_err, inner_error{time.Now(), "Error while getting file MB size. Err: " + err.Error()})
-			}
-		}
-
+	// Now base command cycle of logger func
+	for {
+		// parameters copy
+		l.rmu.RLock()
+		param = *l.param
+		l.rmu.RUnlock()
+		
+		// reset writers
 		writer = nil
+
 		// chk disabling console
 		if !param.fNoCon {
 			writer = io.Writer(os.Stdout)
 		}
-		// chk stdErr out
-		if param.fStdErr && (writer == nil) {
-			writer = io.Writer(os.Stderr)
-		} else if param.fStdErr && (writer != nil) {
-			writer = io.MultiWriter(writer, io.Writer(os.Stderr))
-		}
-
-		// writer already set to out now adding one more
-		if param.logFile != nil {
-			writer = io.MultiWriter(writer, param.logFile)
-		}
-
-		// writing errors into log what occurs during initialising
-		if len(inner_err) > 0 {
-			for _, v := range inner_err {
-				_, err := io.WriteString(writer, v.t.String()+" -> "+"[ERR]: "+v.s+"\n")
-				if err != nil {
-					panic(err)
-				}
+		// chk stdErr out (add it or init with it)
+		if param.fStdErr {
+			if (writer == nil) {
+				writer = io.Writer(os.Stderr)
+			} else {
+				writer = io.MultiWriter(writer, os.Stderr)
 			}
-			inner_err = []inner_error{}
 		}
 
-		// getting data from channel cycle
-		for msg := range c {
-			cmd = msg.cmd
+		// add file to out
+		if param.logFile != nil {
+			if (writer == nil) {
+				writer = io.Writer(param.logFile)
+			} else {
+				writer = io.MultiWriter(writer, param.logFile)
+			}
+		}
 
-			if cmd != cmdWrite {
+		// check file day size control
+		if param.fileDaySize > 0 && param.logFile != nil {
+			// close old channel
+			if _, ok := <- cCancel; ok {
+				close(cCancel)
+			}
+			cCancel = make(chan struct{})
+			go fileTimeControl(l, cCancel)
+			defer close(cCancel)
+		}
+
+
+
+		// main cycle for getting data from channel cycle
+		for msg := range l.logChan {
+			switch msg.cmd {
+			case cmdWrite:
+				// write log
+				_, err := io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
+				if err != nil {
+					lostLogMsg = msg.t+" -> "+msg.msg
+					// need restart writers and reload config
+					procErrorMsg = fmt.Sprintf("Error while write log string \"%s\"; Error: %s", lostLogMsg, err.Error())
+					cmd = cmdReloadConf
+					break
+				}
+
+				// check file MB size control
+				if param.fileMbSize > 0 && param.logFile != nil {
+					f, err := getFileMbSize(param.fileOutPath)
+					if err != nil {
+						procErrorMsg = fmt.Sprintf("Error while getting File Mb Size; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
+						// need restart writers and reload config
+						cmd = cmdReloadConf
+						break
+					}
+
+					if f >= param.fileMbSize {
+						cmd = cmdChangeFile
+						break
+					}
+				}
+			case cmdIdle:
+				// nothing do
+			default:
+				cmd = msg.cmd
 				break
 			}
+		}
 
-			_, err := io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
-			if err != nil {
-				panic(err)
-			}
+		// stop file control
+		if _, ok := <- cCancel; ok {
+			close(cCancel)
 		}
 
 		// processing commands
@@ -323,25 +301,17 @@ func logger(c chan logData, base_param *logParam, wg *sync.WaitGroup) {
 			var err error
 			param.logFile, err = changeFile(param.logFile, param.fileOutPath)
 			if err != nil {
-				inner_err = append(inner_err, inner_error{time.Now(), "Error while changing file. Err: " + err.Error()})
+				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
 			}
 		case cmdReloadConf:
-			//var tmpFile *os.File = param.logFile
-			param = *base_param
-			//param.logFile = tmpFile
+			// restart cycle and copy param at start
 		case cmdStop:
-			fStop = true
+			return
 		}
 
-		// check timer and stopping it
-		if tmr != nil && cCancel != nil {
-			select {
-			case cCancel <- true:
-				close(cCancel)
-			default:
-			}
-
-			tmr.Stop()
+		// check errors msg
+		if procErrorMsg != "" {
+			fmt.Printf("No logged Error:  \"%s\"\n", procErrorMsg)
 		}
 	}
 }
@@ -356,7 +326,7 @@ func getFileMbSize(path string) (int, error) {
 	}
 }
 
-// log file rotation
+// log file rotation (write into file must be paused while process it)
 func changeFile(logFile *os.File, fileName string) (*os.File, error) {
 
 	// close old file
@@ -382,4 +352,48 @@ func changeFile(logFile *os.File, fileName string) (*os.File, error) {
 	}
 
 	return logFile, nil
+}
+
+
+// control of log file time duration 
+func fileTimeControl(l *Logger, cCancel chan struct{}) {
+
+	const secondInDay = 60 * 60 * 24
+
+	l.rmu.RLock()
+	filePath := l.param.fileOutPath
+	daySize := l.param.fileDaySize * secondInDay
+	checkTime := l.param.checkFileTime
+	l.rmu.RUnlock()
+
+
+	// base cycle for control duration
+	for {
+		// time file creation in second
+		tSec, err := getDateTimeFile(filePath)
+
+		if err != nil {
+			l.OutError("Log time control will stopped. Error while getting datetime creating of file. Err: " + err.Error())
+			return
+		}
+
+		// time in seconds at day starting for file creating time + size log in seconds
+		fileChangeDaySec := (tSec / secondInDay) + int64(daySize)
+
+		// if time is already gone...
+		if time.Now().Unix() >= fileChangeDaySec {
+			writeCmd(l.logChan, cmdChangeFile)
+			return
+		}
+
+
+		// wait timers or signal to stop
+		select {
+		case <-cCancel:
+			l.OutInfo("Time control stopping by signal \"STOP\"")
+			return
+		case <-time.After(time.Duration(checkTime) * time.Second):
+			// period timer occured
+		}
+	}
 }
