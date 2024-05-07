@@ -145,7 +145,7 @@ func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 
 // write logging mesage
 func writeLog(c chan logData, t time.Time, s string) {
-	c <- logData{t.String(), s, cmdWrite}
+	c <- logData{t.Format("2006-01-02 15:04:05.000"), s, cmdWrite}
 }
 
 // write logging command
