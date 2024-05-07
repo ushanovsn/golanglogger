@@ -70,6 +70,10 @@ func New(l LoggingLevel) *Logger {
 	log.param.logLvl = l
 	log.logChan = make(chan logData, log.param.lBuf)
 
+	// init log linking objects
+	log.wg = &sync.WaitGroup{}
+	log.rmu = &sync.RWMutex{}
+
 	// memorized starting logger
 	log.wg.Add(1)
 	// start new logger
@@ -79,13 +83,10 @@ func New(l LoggingLevel) *Logger {
 	return &log
 }
 
-// initializing base parameters (set parameters what not standart init values)
-func getBaseParam() *logParam {
-	return &logParam{logLvl: initLogLevel, lBuf: initLogBuffer, checkFileTime: initCheckTime}
-}
 
 // stopping logger
 func (log *Logger) StopLog() {
+	log.Out("Logger stopping by command \"STOP\"")
 	writeCmd(log.logChan, cmdStop)
 	log.wg.Wait()
 }
@@ -99,6 +100,7 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 	writeCmd(log.logChan, cmdReloadConf)
 	log.Out("Set logging level = " + l.Name())
 }
+
 
 // set log to file
 func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
@@ -120,6 +122,7 @@ func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
 
 	return true
 }
+
 
 // set log out writers parameters
 func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
@@ -242,21 +245,38 @@ func logger(l *Logger) {
 
 		// check file day size control
 		if param.fileDaySize > 0 && param.logFile != nil {
-			// close old channel
-			if _, ok := <- cCancel; ok {
-				close(cCancel)
-			}
 			cCancel = make(chan struct{})
 			go fileTimeControl(l, cCancel)
-			defer close(cCancel)
 		}
 
+		// check lost messages
+		if lostLogMsg != "" {
+			_, err := io.WriteString(writer, lostLogMsg+"\n")
+			if err != nil {
+				// when error - just do it again and again
+				fmt.Printf("Multiple ERROR while write log string \"%s\"; Error: %s\n", lostLogMsg, err.Error())
+				time.Sleep(time.Second)
+				continue
+			}
+			lostLogMsg = ""
+		}
+
+		// check old errors
+		if procErrorMsg != "" {
+			_, err := io.WriteString(writer, procErrorMsg+"\n")
+			if err != nil {
+				// when error - just do it again and again
+				fmt.Printf("Multiple ERROR while write old error into log. Old error: \"%s\"; Current error: %s\n", procErrorMsg, err.Error())
+				time.Sleep(time.Second)
+				continue
+			}
+			procErrorMsg = ""
+		}
 
 
 		// main cycle for getting data from channel cycle
 		for msg := range l.logChan {
-			switch msg.cmd {
-			case cmdWrite:
+			if msg.cmd == cmdWrite {
 				// write log
 				_, err := io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
 				if err != nil {
@@ -282,16 +302,17 @@ func logger(l *Logger) {
 						break
 					}
 				}
-			case cmdIdle:
-				// nothing do
-			default:
+			} else if msg.cmd == cmdIdle {
+				continue
+			} else {
 				cmd = msg.cmd
 				break
 			}
 		}
 
-		// stop file control
-		if _, ok := <- cCancel; ok {
+
+		// stop file control (this one who closing channel, and checking for nil - is enought)
+		if cCancel != nil {
 			close(cCancel)
 		}
 
@@ -309,50 +330,13 @@ func logger(l *Logger) {
 			return
 		}
 
-		// check errors msg
+		// check errors msg and emergency write it into console
 		if procErrorMsg != "" {
 			fmt.Printf("No logged Error:  \"%s\"\n", procErrorMsg)
 		}
 	}
 }
 
-// returning file size and errors
-func getFileMbSize(path string) (int, error) {
-	f, err := os.Stat(path)
-	if err == nil {
-		return int(f.Size() / 1048576), nil
-	} else {
-		return 0, err
-	}
-}
-
-// log file rotation (write into file must be paused while process it)
-func changeFile(logFile *os.File, fileName string) (*os.File, error) {
-
-	// close old file
-	err := logFile.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	// rename old file
-	t := time.Now()
-	formattedT := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
-		t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second())
-	err = os.Rename(fileName, fileName+"_"+formattedT)
-	if err != nil {
-		return nil, err
-	}
-
-	// new file
-	logFile, err = os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-
-	return logFile, nil
-}
 
 
 // control of log file time duration 
