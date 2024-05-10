@@ -187,6 +187,15 @@ func (log *Logger) SetBufferSize(bSize int) {
 
 // set log to file
 func (log *Logger) SetFileParam(mbSize int, daySize int) {
+	if mbSize < 0 {
+		log.OutError(fmt.Sprintf("Wrong file size value: %d", mbSize))
+		return
+	}
+	if daySize < 0 {
+		log.OutError(fmt.Sprintf("Wrong day size for file value: %d", daySize))
+		return
+	}
+
 	log.rmu.Lock()
 	log.param.fileMbSize = mbSize
 	log.param.fileDaySize = daySize
