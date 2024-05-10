@@ -62,8 +62,9 @@ type Logger struct {
 }
 
 // create logger w params
-func New(l LoggingLevel) *Logger {
+func New(l LoggingLevel, filePath string) *Logger {
 	var log Logger
+	var err error
 	log.param = getBaseParam()
 	
 	// set received parameters
@@ -74,11 +75,22 @@ func New(l LoggingLevel) *Logger {
 	log.wg = &sync.WaitGroup{}
 	log.rmu = &sync.RWMutex{}
 
+	// set out into file
+	if filePath != "" {
+		log.param.logFile, err = getFileOut(filePath)
+		if err == nil {
+			log.param.fileOutPath = filePath
+		}
+	}
+
 	// memorized starting logger
 	log.wg.Add(1)
 	// start new logger
 	go logger(&log)
 	log.Out("Logger starting w log level = " + l.Name())
+	if err != nil {
+		log.OutError("Error while init log-file: " + err.Error())
+	}
 
 	return &log
 }
@@ -103,7 +115,7 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 
 
 // set log to file
-func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
+func (log *Logger) SetFile(fPath string, mbSize int, daySize int) {
 	log.rmu.Lock()
 	log.param.fileOutPath = fPath
 	log.param.fileMbSize = mbSize
@@ -113,8 +125,6 @@ func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
 	log.OutDebug("Logger will restart with new file parameters")
 	writeCmd(log.logChan, cmdSetFile)
 	log.OutInfo("Logger set out to file")
-
-	return true
 }
 
 
@@ -213,10 +223,15 @@ func logger(l *Logger) {
 		param = *l.param
 		l.rmu.RUnlock()
 
-		// received command to log out into file
-		if cmd == cmdSetFile && param.logFile == nil {
+		// received command to log out into file (change or new)
+		if cmd == cmdSetFile {
 			var err error
-			param.logFile, err = getFileOut(param.fileOutPath)
+			if param.logFile == nil {
+				param.logFile, err = getFileOut(param.fileOutPath)
+			} else {
+				param.logFile, err = changeFile(param.logFile, param.fileOutPath, false)
+			}
+
 			if err != nil {
 				procErrorMsg = fmt.Sprintf("Error while setting log to file; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
 			} else {
@@ -330,7 +345,7 @@ func logger(l *Logger) {
 		switch cmd {
 		case cmdChangeFile:
 			var err error
-			param.logFile, err = changeFile(param.logFile, param.fileOutPath)
+			param.logFile, err = changeFile(param.logFile, param.fileOutPath, true)
 			if err != nil {
 				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
 			} else {

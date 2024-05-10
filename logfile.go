@@ -21,7 +21,7 @@ func getFileMbSize(path string) (int, error) {
 
 
 // log file rotation (write into file must be paused while process it)
-func changeFile(logFile *os.File, fileName string) (*os.File, error) {
+func changeFile(logFile *os.File, fileName string, is_rotation bool) (*os.File, error) {
 
 	// close old file
 	err := logFile.Close()
@@ -29,14 +29,16 @@ func changeFile(logFile *os.File, fileName string) (*os.File, error) {
 		return nil, err
 	}
 
-	// rename old file
-	t := time.Now()
-	formattedT := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
-		t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second())
-	err = os.Rename(fileName, fileName+"_"+formattedT)
-	if err != nil {
-		return nil, err
+	if is_rotation {
+		// rename old file
+		t := time.Now()
+		formattedT := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second())
+		err = os.Rename(fileName, fileName+"_"+formattedT)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// new file
