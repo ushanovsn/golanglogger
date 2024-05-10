@@ -1,7 +1,6 @@
 package golanglogger
 
 import (
-	"fmt"
 	"os"
 	"time"
 )
@@ -32,9 +31,7 @@ func changeFile(logFile *os.File, fileName string, is_rotation bool) (*os.File, 
 	if is_rotation {
 		// rename old file
 		t := time.Now()
-		formattedT := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
-			t.Year(), t.Month(), t.Day(),
-			t.Hour(), t.Minute(), t.Second())
+		formattedT := t.Format("2006-01-02T15-04-05.000")
 		err = os.Rename(fileName, fileName+"_"+formattedT)
 		if err != nil {
 			return nil, err

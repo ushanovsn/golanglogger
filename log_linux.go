@@ -17,5 +17,5 @@ func getDateTimeFile(fPath string) (int64, error) {
 
 	// return datetime in seconds
 	lFileSys := f.Sys().(*syscall.Stat_t)
-	return int64(lFileSys.Ctim.Sec), nil
+	return int64(lFileSys.Atim.Sec), nil
 }

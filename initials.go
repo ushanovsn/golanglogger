@@ -5,9 +5,14 @@ const initLogLevel = ErrorLvl
 
 // Default logger channel buffer size
 const initLogBuffer = 20
+// Size buffer limits
+const minBufferSize = 1
+const maxBufferSize = 1000
 
 // Default time checking file size (in seconds)
 const initCheckTime = 10
+
+
 
 
 

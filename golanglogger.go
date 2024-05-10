@@ -16,7 +16,6 @@ const (
 	cmdWrite
 	cmdStop
 	cmdReloadConf
-	cmdSetFile
 	cmdChangeFile
 )
 
@@ -45,7 +44,7 @@ type logParam struct {
 	fileMbSize int
 	// file duration
 	fileDaySize int
-	// check file delay size period in seconds
+	// delay for check file size function (in seconds)
 	checkFileTime int
 }
 
@@ -59,34 +58,42 @@ type Logger struct {
 	logChan chan logData
 	// logger counter
 	wg *sync.WaitGroup
+	// logger running flag
+	fLogRun bool
 }
 
-// create logger w params
+// create logger w params (if file path is "" then no logging into file)
 func New(l LoggingLevel, filePath string) *Logger {
 	var log Logger
 	var err error
 	log.param = getBaseParam()
 	
-	// set received parameters
+	// set received level
 	log.param.logLvl = l
+	// create channel for communications with logger
 	log.logChan = make(chan logData, log.param.lBuf)
-
 	// init log linking objects
 	log.wg = &sync.WaitGroup{}
 	log.rmu = &sync.RWMutex{}
 
-	// set out into file
+	// set out into file if needed
 	if filePath != "" {
 		log.param.logFile, err = getFileOut(filePath)
 		if err == nil {
 			log.param.fileOutPath = filePath
 		}
+		// write error after logger starting
 	}
 
 	// memorized starting logger
 	log.wg.Add(1)
 	// start new logger
 	go logger(&log)
+
+	// indicate logger started
+	log.fLogRun = true
+
+	// the greeting line after logger was started
 	log.Out("Logger starting w log level = " + l.Name())
 	if err != nil {
 		log.OutError("Error while init log-file: " + err.Error())
@@ -95,12 +102,53 @@ func New(l LoggingLevel, filePath string) *Logger {
 	return &log
 }
 
+// restart logger
+func (log *Logger) restart() {
+	var err error
+
+	// create new channel for communications with logger
+	log.logChan = make(chan logData, log.param.lBuf)
+
+	// set out into file if needed
+	if log.param.fileOutPath != "" {
+		log.param.logFile, err = getFileOut(log.param.fileOutPath)
+		// write error after logger starting
+	}
+
+	// memorized starting logger
+	log.wg.Add(1)
+	// start new logger
+	go logger(log)
+
+	// indicate logger started
+	log.fLogRun = true
+
+	// the greeting line after logger was started
+	log.Out("Logger starting w log level = " + log.param.logLvl.Name())
+	if err != nil {
+		log.OutError("Error while init log-file: " + err.Error())
+	}
+}
+
 
 // stopping logger
 func (log *Logger) StopLog() {
 	log.Out("Logger stopping by command \"STOP\"")
-	writeCmd(log.logChan, cmdStop)
+	log.cmdOut(log.logChan, cmdStop)
+	// wait when logger stopping
 	log.wg.Wait()
+
+	// now logger stopped
+
+	if log.param.logFile != nil {
+		err := log.param.logFile.Close()
+		if err != nil {
+			fmt.Printf("Error while log file closing:  \"%s\"\n", err)
+		}
+	}
+
+	log.param.logFile = nil	
+	log.fLogRun = false
 }
 
 
@@ -109,26 +157,47 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 	log.rmu.Lock()
 	log.param.logLvl = l
 	log.rmu.Unlock()
-	writeCmd(log.logChan, cmdReloadConf)
+	log.cmdOut(log.logChan, cmdReloadConf)
 	log.Out("Set logging level = " + l.Name())
 }
 
 
-// set log to file
-func (log *Logger) SetFile(fPath string, mbSize int, daySize int) {
+// set log level
+func (log *Logger) SetBufferSize(bSize int) {
+	if bSize < minBufferSize || bSize > maxBufferSize {
+		log.OutError(fmt.Sprintf("Wrong buffer size: %d", bSize))
+		return
+	}
+
+	log.Out(fmt.Sprintf("Logger will be restarted w new buffer size: %d", bSize))
+
+	// stopping logger
+	log.StopLog()
+
+	// set new value to bufer
 	log.rmu.Lock()
-	log.param.fileOutPath = fPath
+	log.param.lBuf = bSize
+	log.rmu.Unlock()
+
+	log.restart()
+
+	log.Out(fmt.Sprintf("Change log buffer size changed to %d", bSize))
+}
+
+
+// set log to file
+func (log *Logger) SetFileParam(mbSize int, daySize int) {
+	log.rmu.Lock()
 	log.param.fileMbSize = mbSize
 	log.param.fileDaySize = daySize
 	log.rmu.Unlock()
 
-	log.OutDebug("Logger will restart with new file parameters")
-	writeCmd(log.logChan, cmdSetFile)
-	log.OutInfo("Logger set out to file")
+	log.OutDebug(fmt.Sprintf("Logger will restart with new file parameters: %d Mb size, %d days duration", mbSize, daySize))
+	log.cmdOut(log.logChan, cmdReloadConf)
 }
 
 
-// set log out writers parameters
+// set log out writers parameters (con - console out flag, stdErr - standart error out flag)
 func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 
 	if !con && !stdErr {
@@ -142,7 +211,7 @@ func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 	log.rmu.Unlock()
 
 	log.OutDebug("Logger will restart with new outs parameters")
-	writeCmd(log.logChan, cmdReloadConf)
+	log.cmdOut(log.logChan, cmdReloadConf)
 
 	return true
 }
@@ -160,7 +229,7 @@ func writeCmd(c chan<- logData, cmd loggingCmd) {
 // out Debug string into log
 func (log *Logger) OutDebug(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
-	if int(log.param.logLvl) <= int(DebugLvl) {
+	if int(log.param.logLvl) <= int(DebugLvl) && log.fLogRun {
 		writeLog(log.logChan, time.Now(), "[DBG]: "+msg)
 	}
 }
@@ -168,7 +237,7 @@ func (log *Logger) OutDebug(msg string) {
 // out Info string into log
 func (log *Logger) OutInfo(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
-	if int(log.param.logLvl) <= int(InfoLvl) {
+	if int(log.param.logLvl) <= int(InfoLvl) && log.fLogRun {
 		writeLog(log.logChan, time.Now(), "[INF]: "+msg)
 	}
 }
@@ -176,7 +245,7 @@ func (log *Logger) OutInfo(msg string) {
 // out Warning string into log
 func (log *Logger) OutWarning(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
-	if int(log.param.logLvl) <= int(WarningLvl) {
+	if int(log.param.logLvl) <= int(WarningLvl) && log.fLogRun {
 		writeLog(log.logChan, time.Now(), "[WRN]: "+msg)
 	}
 }
@@ -184,27 +253,41 @@ func (log *Logger) OutWarning(msg string) {
 // out Error string into log
 func (log *Logger) OutError(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
-	if int(log.param.logLvl) <= int(ErrorLvl) {
+	if int(log.param.logLvl) <= int(ErrorLvl) && log.fLogRun {
 		writeLog(log.logChan, time.Now(), "[ERR]: "+msg)
 	}
 }
 
 // always out string into log
 func (log *Logger) Out(msg string) {
-	writeLog(log.logChan, time.Now(), "[MSG]: "+msg)
+	if log.fLogRun {
+		writeLog(log.logChan, time.Now(), "[MSG]: "+msg)
+	}
+	
 }
+
+// send command to logger
+func (log *Logger) cmdOut(c chan<- logData, cmd loggingCmd) {
+	if log.fLogRun {
+		log.OutDebug(fmt.Sprintf("Internal command for logger: %d", cmd))
+		writeCmd(c, cmd)
+	}
+	
+}
+
+
+
 
 // logger goroutine
 func logger(l *Logger) {
 	// reset memorysed logger when exit
 	defer l.wg.Done()
 
+
 	// base log writer
 	var writer io.Writer
-
 	// parameters copy values
 	var param logParam
-
 	// channel for stop goroutine check time file 
 	var cCancel chan struct{}
 	// current received command
@@ -223,25 +306,6 @@ func logger(l *Logger) {
 		param = *l.param
 		l.rmu.RUnlock()
 
-		// received command to log out into file (change or new)
-		if cmd == cmdSetFile {
-			var err error
-			if param.logFile == nil {
-				param.logFile, err = getFileOut(param.fileOutPath)
-			} else {
-				param.logFile, err = changeFile(param.logFile, param.fileOutPath, false)
-			}
-
-			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while setting log to file; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
-			} else {
-				// set file to main parameters
-				l.rmu.Lock()
-				l.param.logFile = param.logFile
-				l.rmu.Unlock()
-			}
-		}
-
 		// reset writers
 		writer = nil
 
@@ -257,7 +321,6 @@ func logger(l *Logger) {
 				writer = io.MultiWriter(writer, os.Stderr)
 			}
 		}
-
 		// add file to out
 		if param.logFile != nil {
 			if (writer == nil) {
@@ -269,6 +332,7 @@ func logger(l *Logger) {
 
 		// check file day size control
 		if param.fileDaySize > 0 && param.logFile != nil {
+			// if one gorotine started before - it was stopped and channel closed when cmd received in main cycle
 			cCancel = make(chan struct{})
 			go fileTimeControl(l, cCancel)
 		}
@@ -284,7 +348,6 @@ func logger(l *Logger) {
 			}
 			lostLogMsg = ""
 		}
-
 		// check old errors
 		if procErrorMsg != "" {
 			_, err := io.WriteString(writer, procErrorMsg+"\n")
@@ -300,35 +363,41 @@ func logger(l *Logger) {
 
 		// main cycle for getting data from channel cycle
 		for msg := range l.logChan {
+			// received message:
 			if msg.cmd == cmdWrite {
 				// write log
 				_, err := io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
 				if err != nil {
-					lostLogMsg = msg.t+" -> "+msg.msg
 					// need restart writers and reload config
+					// memorize message
+					lostLogMsg = msg.t+" -> "+msg.msg
+					// memorize error
 					procErrorMsg = fmt.Sprintf("Error while write log string \"%s\"; Error: %s", lostLogMsg, err.Error())
 					cmd = cmdReloadConf
 					break
 				}
 
-				// check file MB size control
+				// if check file MB size control enabled
 				if param.fileMbSize > 0 && param.logFile != nil {
 					f, err := getFileMbSize(param.fileOutPath)
 					if err != nil {
-						procErrorMsg = fmt.Sprintf("Error while getting File Mb Size; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
 						// need restart writers and reload config
+						procErrorMsg = fmt.Sprintf("Error while getting File Mb Size; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
 						cmd = cmdReloadConf
 						break
 					}
 
+					// when file is too big - generate cmd for change it
 					if f >= param.fileMbSize {
 						cmd = cmdChangeFile
 						break
 					}
 				}
 			} else if msg.cmd == cmdIdle {
+				// if nothing to do - continue listen the channel
 				continue
 			} else {
+				// need processing the received cmd - break the cycle
 				cmd = msg.cmd
 				break
 			}
@@ -344,25 +413,39 @@ func logger(l *Logger) {
 		// processing commands
 		switch cmd {
 		case cmdChangeFile:
+			// need changing the log file
 			var err error
 			param.logFile, err = changeFile(param.logFile, param.fileOutPath, true)
 			if err != nil {
 				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
 			} else {
-				// set file to main parameters
+				// set file to main parameters of base logger
 				l.rmu.Lock()
 				l.param.logFile = param.logFile
 				l.rmu.Unlock()
 			}
 
 		case cmdReloadConf:
-			// restart cycle and copy param at start
-
-		case cmdSetFile:
-			// restart cycle and copy param at start
+			// restart base cycle and copy param at start
 
 		case cmdStop:
-			_, _ = io.WriteString(writer,"********************************************************************************************\n")
+			// indcate logger stopped
+			l.rmu.Lock()
+			l.fLogRun = false
+			l.rmu.Unlock()
+			// and channel closing
+			close(l.logChan)
+
+			// read all lost messages and stop
+			for msg := range l.logChan {
+				// received message:
+				if msg.cmd == cmdWrite {
+					// write log as can
+					_, _ = io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
+				}
+			}
+			// just line for visual control
+			_, _ = io.WriteString(writer,"********************************************************************************************\n\n\n")
 			return
 		}
 
@@ -380,11 +463,20 @@ func fileTimeControl(l *Logger, cCancel chan struct{}) {
 
 	const secondInDay = 60 * 60 * 24
 
+	// timezone offset
+	_, zOffset := time.Now().In(time.Local).Zone()
+
+	// set parameters at starting monitoring
 	l.rmu.RLock()
+	// file
 	filePath := l.param.fileOutPath
+	// control time
 	daySize := l.param.fileDaySize * secondInDay
+	// period of control operations
 	checkTime := l.param.checkFileTime
 	l.rmu.RUnlock()
+
+	l.OutDebug(fmt.Sprintf("Time control starting for control log file duration: %d days", (daySize/secondInDay)))
 
 
 	// base cycle for control duration
@@ -398,11 +490,19 @@ func fileTimeControl(l *Logger, cCancel chan struct{}) {
 		}
 
 		// time in seconds at day starting for file creating time + size log in seconds
-		fileChangeDaySec := (tSec / secondInDay) + int64(daySize)
+		fileChangeDaySec := ((tSec + int64(zOffset)) / secondInDay)*secondInDay + int64(daySize)
 
 		// if time is already gone...
-		if time.Now().Unix() >= fileChangeDaySec {
-			writeCmd(l.logChan, cmdChangeFile)
+		if (time.Now().Unix() + int64(zOffset)) >= fileChangeDaySec {
+			l.rmu.RLock()
+			// read logger status
+			fRun := l.fLogRun
+			l.rmu.RUnlock()
+
+			if fRun {
+				l.cmdOut(l.logChan, cmdChangeFile)
+			}
+			
 			return
 		}
 
@@ -410,7 +510,7 @@ func fileTimeControl(l *Logger, cCancel chan struct{}) {
 		// wait timers or signal to stop
 		select {
 		case <-cCancel:
-			l.OutInfo("Time control stopping by signal \"STOP\"")
+			l.OutDebug("Time control stopping by signal \"STOP\"")
 			return
 		case <-time.After(time.Duration(checkTime) * time.Second):
 			// period timer occured
