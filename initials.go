@@ -14,5 +14,5 @@ const initCheckTime = 10
 
 // initializing base parameters (set parameters what not standart init values)
 func getBaseParam() *logParam {
-	return &logParam{logLvl: initLogLevel, lBuf: initLogBuffer, checkFileTime: initCheckTime}
+	return &logParam{logLvl: initLogLevel, lBuf: initLogBuffer, checkFileTime: initCheckTime, logFile: nil}
 }

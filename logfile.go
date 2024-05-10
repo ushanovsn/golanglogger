@@ -48,3 +48,12 @@ func changeFile(logFile *os.File, fileName string) (*os.File, error) {
 	return logFile, nil
 }
 
+// creating the file
+func getFileOut(fPath string) (*os.File, error) {
+	logFile, err := os.OpenFile(fPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+
+	return logFile, nil
+}

@@ -16,6 +16,7 @@ const (
 	cmdWrite
 	cmdStop
 	cmdReloadConf
+	cmdSetFile
 	cmdChangeFile
 )
 
@@ -65,7 +66,6 @@ func New(l LoggingLevel) *Logger {
 	var log Logger
 	log.param = getBaseParam()
 	
-
 	// set received parameters
 	log.param.logLvl = l
 	log.logChan = make(chan logData, log.param.lBuf)
@@ -104,21 +104,15 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 
 // set log to file
 func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
-	logFile, err := os.OpenFile(fPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		log.OutError(`Error parameter for log file. Wrong parameter: "` + fPath + `". Error: ` + err.Error())
-		return false
-	}
-
 	log.rmu.Lock()
-	log.param.logFile = logFile
 	log.param.fileOutPath = fPath
 	log.param.fileMbSize = mbSize
 	log.param.fileDaySize = daySize
 	log.rmu.Unlock()
 
 	log.OutDebug("Logger will restart with new file parameters")
-	writeCmd(log.logChan, cmdReloadConf)
+	writeCmd(log.logChan, cmdSetFile)
+	log.OutInfo("Logger set out to file")
 
 	return true
 }
@@ -128,7 +122,7 @@ func (log *Logger) SetFile(fPath string, mbSize int, daySize int) bool {
 func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 
 	if !con && !stdErr {
-		log.OutError("Error parameter for out log. Received STDOUT and STDERR false for both")
+		log.OutError("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
 		return false
 	}
 
@@ -195,29 +189,44 @@ func logger(l *Logger) {
 	// reset memorysed logger when exit
 	defer l.wg.Done()
 
-	// log writer
+	// base log writer
 	var writer io.Writer
 
 	// parameters copy values
 	var param logParam
 
-	// stop goroutine check filec hannel
+	// channel for stop goroutine check time file 
 	var cCancel chan struct{}
 	// current received command
 	var cmd loggingCmd = cmdIdle
 	// message what was generating error in cycle before
 	var lostLogMsg string
-	// error while changing file
+	// error while cmd processing
 	var procErrorMsg string
 
 
-	// Now base command cycle of logger func
+
+	// Now base cycle of logger func
 	for {
 		// parameters copy
 		l.rmu.RLock()
 		param = *l.param
 		l.rmu.RUnlock()
-		
+
+		// received command to log out into file
+		if cmd == cmdSetFile && param.logFile == nil {
+			var err error
+			param.logFile, err = getFileOut(param.fileOutPath)
+			if err != nil {
+				procErrorMsg = fmt.Sprintf("Error while setting log to file; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
+			} else {
+				// set file to main parameters
+				l.rmu.Lock()
+				l.param.logFile = param.logFile
+				l.rmu.Unlock()
+			}
+		}
+
 		// reset writers
 		writer = nil
 
@@ -311,7 +320,8 @@ func logger(l *Logger) {
 		}
 
 
-		// stop file control (this one who closing channel, and checking for nil - is enought)
+
+		// stop file control (this place is one who closing channel, and checking for nil - is enought)
 		if cCancel != nil {
 			close(cCancel)
 		}
@@ -323,10 +333,21 @@ func logger(l *Logger) {
 			param.logFile, err = changeFile(param.logFile, param.fileOutPath)
 			if err != nil {
 				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
+			} else {
+				// set file to main parameters
+				l.rmu.Lock()
+				l.param.logFile = param.logFile
+				l.rmu.Unlock()
 			}
+
 		case cmdReloadConf:
 			// restart cycle and copy param at start
+
+		case cmdSetFile:
+			// restart cycle and copy param at start
+
 		case cmdStop:
+			_, _ = io.WriteString(writer,"********************************************************************************************\n")
 			return
 		}
 
