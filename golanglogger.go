@@ -8,6 +8,25 @@ import (
 	"time"
 )
 
+// base logger interface
+type Golanglogger interface {
+	OutDebug(string)
+	OutInfo(string)
+	OutWarning(string)
+	OutError(string)
+	Out(string)
+	SetLevel(LoggingLevel)
+	SetFileParam(int, int)
+	SetBufferSize(int)
+	SetStdOut(bool, bool)
+	CurrentOutParams() (bool, bool, string)
+	CurrentBufSize() (int)
+	CurrentLevel() (LoggingLevel)
+	CurrentFileControl() (int, int)
+	StopLog()
+}
+
+
 // logger cmd enums
 type loggingCmd int
 
@@ -63,7 +82,7 @@ type Logger struct {
 }
 
 // create logger w params (if file path is "" then no logging into file)
-func New(l LoggingLevel, filePath string) *Logger {
+func New(l LoggingLevel, filePath string) Golanglogger {
 	var log Logger
 	log.param = getBaseParam()
 
@@ -181,11 +200,11 @@ func (log *Logger) SetFileParam(mbSize int, daySize int) {
 }
 
 // set log out writers parameters (con - console out flag, stdErr - standart error out flag)
-func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
+func (log *Logger) SetStdOut(con bool, stdErr bool) {
 
 	if !con && !stdErr {
 		log.OutError("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
-		return false
+		return
 	}
 
 	log.rmu.Lock()
@@ -195,8 +214,49 @@ func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
 
 	log.OutDebug("Logger will restart with new outs parameters")
 	log.cmdOut(log.logChan, cmdReloadConf)
+}
 
-	return true
+// get logger parameters for writing messages
+func (log *Logger) CurrentOutParams() (con bool, stdErr bool, filePath string) {
+
+	log.rmu.RLock()
+	con = !log.param.fNoCon
+	stdErr = log.param.fStdErr
+	filePath = log.param.fileOutPath
+	log.rmu.RUnlock()
+
+	return con, stdErr, filePath
+}
+
+// get logger buffer size
+func (log *Logger) CurrentBufSize() (size int) {
+
+	log.rmu.RLock()
+	size = log.param.lBuf
+	log.rmu.RUnlock()
+
+	return size
+}
+
+// get logger level
+func (log *Logger) CurrentLevel() (lvl LoggingLevel) {
+
+	log.rmu.RLock()
+	lvl = log.param.logLvl
+	log.rmu.RUnlock()
+
+	return lvl
+}
+
+// get logger file control parameters
+func (log *Logger) CurrentFileControl() (mbSize int, daySize int) {
+
+	log.rmu.RLock()
+	mbSize = log.param.fileMbSize
+	daySize = log.param.fileDaySize
+	log.rmu.RUnlock()
+
+	return mbSize, daySize
 }
 
 // write logging mesage

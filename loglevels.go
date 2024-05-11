@@ -13,7 +13,6 @@ const (
 	InfoLvl
 	WarningLvl
 	ErrorLvl
-	definitelyLvl
 )
 
 // returns LoggingLevel const by text value (initial level if wrong name)
@@ -26,5 +25,9 @@ func LoggingLevelValue(s string) (LoggingLevel, error) {
 
 // returns LoggingLevel name
 func (l LoggingLevel) Name() string {
-	return strings.ToUpper([]string{"Debug", "Info", "Warning", "Error"}[int(l)])
+	lvlNames := []string{"Debug", "Info", "Warning", "Error"}
+	if int(l) > (len(lvlNames)-1) {
+		return ""
+	}
+	return strings.ToUpper(lvlNames[int(l)])
 }
