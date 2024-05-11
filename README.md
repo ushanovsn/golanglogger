@@ -7,7 +7,9 @@ Logger module (project within of language learning)
 
 ## Use logger:
 Logger created as goroutine and will works in async mode.  Messages for log are transmitted through the channel with no zero buffer size.
-File day size control works in another goroutine and check the time for period 10 sec. It not enough accurate variant, but low count of file accesses (to prevent old logs from getting into the file, a time check is used for each writing).
+
+File day size control works in another goroutine and check the time for period 10 sec.
+It not enough accurate variant, but low count of file accesses (to prevent old logs from getting into the file, a time check is used for each writing).
 A new file will be created after the specified duration at about 00:00.
 
 1. At startup, need to create a logger:
@@ -22,18 +24,19 @@ defer log.StopLog()
 ```
 
 3. After logger creation, it is possible to change the some parameters while program running:
-    3.1. Change logging level:
+
+    1. Change logging level:
     ```Go
     log.SetLevel(golanglogger.ErrorLvl)
     ```
 
-    3.2. Change buffer size (default value: 20):
+    *. Change buffer size (default value: 20):
     ```Go
     log.SetBufferSize(100)
     ```
     available values at 1 to 1000
 
-    3.3. Set file control parameters (default switched off values: 0, 0):
+    *. Set file control parameters (default switched off values: 0, 0):
     ```Go
     log.SetFileParam(10, 1)
     ```

@@ -10,7 +10,9 @@ const minBufferSize = 1
 const maxBufferSize = 1000
 
 // Default time checking file size (in seconds)
-const initCheckTime = 10
+const initCheckTime = 60
+// amount seconds in one day for calculating
+const secondInDay = 60 * 60 * 24
 
 
 
