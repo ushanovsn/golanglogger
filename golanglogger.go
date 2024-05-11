@@ -143,7 +143,6 @@ func (log *Logger) StopLog() {
 	}
 
 	log.param.logFile = nil
-	log.fLogRun = false
 }
 
 // set log level
@@ -155,7 +154,7 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 	log.Out("Set logging level = " + l.Name())
 }
 
-// set log level
+// set log channel buffer size
 func (log *Logger) SetBufferSize(bSize int) {
 	if bSize < minBufferSize || bSize > maxBufferSize {
 		log.OutError(fmt.Sprintf("Wrong buffer size: %d", bSize))
