@@ -66,7 +66,7 @@ type Logger struct {
 func New(l LoggingLevel, filePath string) *Logger {
 	var log Logger
 	log.param = getBaseParam()
-	
+
 	// set received level
 	log.param.logLvl = l
 	// set received path
@@ -108,7 +108,6 @@ func (log *Logger) start() {
 	}
 }
 
-
 // stopping logger
 func (log *Logger) StopLog() {
 	log.Out("Logger stopping by command \"STOP\"")
@@ -125,10 +124,9 @@ func (log *Logger) StopLog() {
 		}
 	}
 
-	log.param.logFile = nil	
+	log.param.logFile = nil
 	log.fLogRun = false
 }
-
 
 // set log level
 func (log *Logger) SetLevel(l LoggingLevel) {
@@ -138,7 +136,6 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 	log.cmdOut(log.logChan, cmdReloadConf)
 	log.Out("Set logging level = " + l.Name())
 }
-
 
 // set log level
 func (log *Logger) SetBufferSize(bSize int) {
@@ -163,7 +160,6 @@ func (log *Logger) SetBufferSize(bSize int) {
 	log.Out(fmt.Sprintf("Logger buffer size changed to %d", bSize))
 }
 
-
 // set log file control parameters
 func (log *Logger) SetFileParam(mbSize int, daySize int) {
 	if mbSize < 0 {
@@ -183,7 +179,6 @@ func (log *Logger) SetFileParam(mbSize int, daySize int) {
 	log.OutDebug(fmt.Sprintf("Logger will restart with new file parameters: %d Mb size, %d days duration", mbSize, daySize))
 	log.cmdOut(log.logChan, cmdReloadConf)
 }
-
 
 // set log out writers parameters (con - console out flag, stdErr - standart error out flag)
 func (log *Logger) SetErrOut(con bool, stdErr bool) bool {
@@ -251,7 +246,7 @@ func (log *Logger) Out(msg string) {
 	if log.fLogRun {
 		writeLog(log.logChan, time.Now(), "[MSG]: "+msg)
 	}
-	
+
 }
 
 // send command to logger
@@ -260,23 +255,19 @@ func (log *Logger) cmdOut(c chan<- logData, cmd loggingCmd) {
 		log.OutDebug(fmt.Sprintf("Internal command for logger: %d", cmd))
 		writeCmd(c, cmd)
 	}
-	
+
 }
-
-
-
 
 // logger goroutine
 func logger(l *Logger) {
 	// reset memorysed logger when exit
 	defer l.wg.Done()
 
-
 	// base log writer
 	var writer io.Writer
 	// parameters copy values
 	var param logParam
-	// channel for stop goroutine check time file 
+	// channel for stop goroutine check time file
 	var cCancel chan struct{}
 	// current received command
 	var cmd loggingCmd = cmdIdle
@@ -288,8 +279,6 @@ func logger(l *Logger) {
 	var prepDay int
 	// time in seconds for control file duration
 	var daySize int
-
-
 
 	// Now base cycle of logger func
 	for {
@@ -338,7 +327,6 @@ func logger(l *Logger) {
 			procErrorMsg = ""
 		}
 
-
 		// main cycle for getting data from channel cycle
 		for msg := range l.logChan {
 
@@ -347,14 +335,14 @@ func logger(l *Logger) {
 				// before check time control of file, not to write new values to old file
 				if param.fileDaySize > 0 && param.logFile != nil {
 					// if in this iteration - new day starting
-					if time.Now().YearDay() - prepDay != 0 {
+					if time.Now().YearDay()-prepDay != 0 {
 						// check file duration
 						fChange, err := checkFileTime(zOffset, param.fileOutPath, daySize)
 
 						if err != nil {
 							// need restart writers and reload config
 							// memorize message
-							lostLogMsg = msg.t+" -> "+msg.msg
+							lostLogMsg = msg.t + " -> " + msg.msg
 							// memorize error
 							procErrorMsg = fmt.Sprintf("Error while check log file time duration. Error: %s", err.Error())
 							cmd = cmdReloadConf
@@ -363,9 +351,9 @@ func logger(l *Logger) {
 
 						// if time is already gone...
 						if fChange {
-							lostLogMsg = msg.t+" -> "+msg.msg
+							lostLogMsg = msg.t + " -> " + msg.msg
 							cmd = cmdChangeFile
-						break
+							break
 						}
 					}
 				}
@@ -375,7 +363,7 @@ func logger(l *Logger) {
 				if err != nil {
 					// need restart writers and reload config
 					// memorize message
-					lostLogMsg = msg.t+" -> "+msg.msg
+					lostLogMsg = msg.t + " -> " + msg.msg
 					// memorize error
 					procErrorMsg = fmt.Sprintf("Error while write log string \"%s\"; Error: %s", lostLogMsg, err.Error())
 					cmd = cmdReloadConf
@@ -407,8 +395,6 @@ func logger(l *Logger) {
 				break
 			}
 		}
-
-
 
 		// stop file control (this place is one who closing channel, and checking for nil - is enought)
 		if cCancel != nil {
@@ -450,7 +436,7 @@ func logger(l *Logger) {
 				}
 			}
 			// just line for visual control
-			_, _ = io.WriteString(writer,"********************************************************************************************\n\n\n")
+			_, _ = io.WriteString(writer, "********************************************************************************************\n\n\n")
 			return
 		}
 
@@ -461,9 +447,7 @@ func logger(l *Logger) {
 	}
 }
 
-
-
-// independed control of log file time duration 
+// independed control of log file time duration
 func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 
 	// set parameters at starting monitoring
@@ -476,8 +460,7 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 	checkTime := l.param.checkFileTime
 	l.rmu.RUnlock()
 
-	l.OutDebug(fmt.Sprintf("Time control starting for control log file duration: %d days", (daySize/secondInDay)))
-
+	l.OutDebug(fmt.Sprintf("Time control starting for control log file duration: %d days", (daySize / secondInDay)))
 
 	// base cycle for control duration
 	for {
@@ -510,7 +493,6 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 			return
 		}
 
-
 		// wait timers or signal to stop
 		select {
 		case <-cCancel:
@@ -522,33 +504,30 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 	}
 }
 
-
-
-// check expiration control of log file time duration 
+// check expiration control of log file time duration
 //
 // zOffset - TimeZone shift in hours;
 // filePath - controlling file path;
 // daySizeSec - maximum file durations in day*seconds;
 func checkFileTime(zOffset int, filePath string, daySizeSec int) (bool, error) {
 
-		// time file creation in second
-		tSec, err := getDateTimeFile(filePath)
+	// time file creation in second
+	tSec, err := getDateTimeFile(filePath)
 
-		if err != nil {
-			return false, err
-		}
+	if err != nil {
+		return false, err
+	}
 
-		// maximum time in seconds up to which a file can exist
-		fileChangeDaySec := ((tSec + int64(zOffset)) / secondInDay) * secondInDay + int64(daySizeSec)
+	// maximum time in seconds up to which a file can exist
+	fileChangeDaySec := ((tSec+int64(zOffset))/secondInDay)*secondInDay + int64(daySizeSec)
 
-		// if time is already gone...
-		if (time.Now().Unix() + int64(zOffset)) >= fileChangeDaySec {
-			return true, nil
-		} else {
-			return false, nil
-		}
+	// if time is already gone...
+	if (time.Now().Unix() + int64(zOffset)) >= fileChangeDaySec {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
-
 
 // aggregating writers for logger
 //
@@ -564,7 +543,7 @@ func getWriter(fNoCon bool, fStdErr bool, logFile *os.File) io.Writer {
 
 	// chk stdErr out (add it or init with it)
 	if fStdErr {
-		if (writer == nil) {
+		if writer == nil {
 			writer = io.Writer(os.Stderr)
 		} else {
 			writer = io.MultiWriter(writer, os.Stderr)
@@ -573,7 +552,7 @@ func getWriter(fNoCon bool, fStdErr bool, logFile *os.File) io.Writer {
 
 	// add file to out
 	if logFile != nil {
-		if (writer == nil) {
+		if writer == nil {
 			writer = io.Writer(logFile)
 		} else {
 			writer = io.MultiWriter(writer, logFile)

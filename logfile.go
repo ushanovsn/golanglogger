@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-
-
 // returning file size and errors
 func getFileMbSize(path string) (int, error) {
 	f, err := os.Stat(path)
@@ -16,8 +14,6 @@ func getFileMbSize(path string) (int, error) {
 		return 0, err
 	}
 }
-
-
 
 // log file rotation (write into file must be paused while process it)
 func changeFile(logFile *os.File, fileName string, is_rotation bool) (*os.File, error) {

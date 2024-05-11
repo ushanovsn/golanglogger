@@ -1,11 +1,11 @@
 //go:build windows && !linux
+
 package golanglogger
 
 import (
 	"os"
 	"syscall"
 )
-
 
 // returning dateTime of creation file in seconds
 func getDateTimeFile(fPath string) (int64, error) {

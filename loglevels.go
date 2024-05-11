@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-
-
 // logger level enums
 type LoggingLevel int
 
@@ -18,9 +16,6 @@ const (
 	definitelyLvl
 )
 
-
-
-
 // returns LoggingLevel const by text value (initial level if wrong name)
 func LoggingLevelValue(s string) (LoggingLevel, error) {
 	if l, ok := map[string]LoggingLevel{"debug": DebugLvl, "info": InfoLvl, "warning": WarningLvl, "error": ErrorLvl}[strings.ToLower(s)]; ok {
@@ -28,7 +23,6 @@ func LoggingLevelValue(s string) (LoggingLevel, error) {
 	}
 	return initLogLevel, errors.New("Wrong LogLevel value: " + s)
 }
-
 
 // returns LoggingLevel name
 func (l LoggingLevel) Name() string {

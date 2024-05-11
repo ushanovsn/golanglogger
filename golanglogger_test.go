@@ -4,9 +4,7 @@ import (
 	"testing"
 )
 
-
-
-func TestLoggingLevelValue(t *testing.T){
+func TestLoggingLevelValue(t *testing.T) {
 
 	v, err := LoggingLevelValue("debug")
 	if err != nil {
