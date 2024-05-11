@@ -26,7 +26,7 @@ func LoggingLevelValue(s string) (LoggingLevel, error) {
 // returns LoggingLevel name
 func (l LoggingLevel) Name() string {
 	lvlNames := []string{"Debug", "Info", "Warning", "Error"}
-	if int(l) > (len(lvlNames)-1) {
+	if int(l) > (len(lvlNames) - 1) {
 		return ""
 	}
 	return strings.ToUpper(lvlNames[int(l)])

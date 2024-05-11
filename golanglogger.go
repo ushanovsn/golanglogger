@@ -20,12 +20,11 @@ type Golanglogger interface {
 	SetBufferSize(int)
 	SetStdOut(bool, bool)
 	CurrentOutParams() (bool, bool, string)
-	CurrentBufSize() (int)
-	CurrentLevel() (LoggingLevel)
+	CurrentBufSize() int
+	CurrentLevel() LoggingLevel
 	CurrentFileControl() (int, int)
 	StopLog()
 }
-
 
 // logger cmd enums
 type loggingCmd int
