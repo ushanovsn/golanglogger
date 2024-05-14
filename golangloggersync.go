@@ -171,11 +171,104 @@ func (log *LoggerSync) CurrentFileControl() (mbSize int, daySize int) {
 }
 
 // write logging mesage
-func writeLogSync(w *io.Writer, t time.Time, s string) {
+func (log *LoggerSync) writeLogSync(t time.Time, s string) {
+	// generate message
 	msg := createMsg(t, s)
-	_, err := io.WriteString(*w, msg)
-	if err != nil {
-		fmt.Printf("Error while write log string \"%s\"; Error: %s\n", msg, err.Error())
+	
+	if (log.param.fileMbSize > 0 || log.param.fileDaySize > 0) && log.param.logFile != nil {
+		// if exists file control conditions - need to check it
+		var fileChange bool
+		var procErrorMsg string
+		var err error
+		
+		log.rmu.Lock()
+
+		// file duration control check first
+		if log.param.fileDaySize > 0 {
+			// current time zone offset
+			_, zOffset := time.Now().In(time.Local).Zone()
+			// check file time duration
+			fileChange, _ = checkFileTime(zOffset,log.param.fileOutPath,log.param.fileDaySize)
+		}
+
+		if fileChange {
+			log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
+			if err != nil {
+				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
+				writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
+				log.writer = &writer
+			} else {
+				// set file to main parameters of base logger
+				writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
+				log.writer = &writer
+			}
+		}
+
+		if procErrorMsg != "" {
+			_, err = io.WriteString(*log.writer, procErrorMsg)
+			if err != nil {
+				fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+			}
+		}
+
+		_, err = io.WriteString(*log.writer, msg)
+		if err != nil {
+			fmt.Printf("Not logged ERROR: %s, for MESSAGE: %s", err, msg)
+		}
+
+		// check file MB size control enabled after writing new message
+		if log.param.fileMbSize > 0 && log.param.logFile != nil {
+			f, err := getFileMbSize(log.param.fileOutPath)
+			if err != nil {
+				procErrorMsg = fmt.Sprintf("Error while changing log file by size at time (%v). Err: %s", time.Now(), err.Error())
+			}
+
+			if procErrorMsg != "" {
+				_, err = io.WriteString(*log.writer, procErrorMsg)
+				if err != nil {
+					fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+				}
+			} else {
+				// when file is too big - generate cmd for change it
+				if f >= log.param.fileMbSize {
+					fileChange = true
+				}
+			}
+		}
+
+
+		if fileChange {
+			log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
+			if err != nil {
+				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
+				writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
+				log.writer = &writer
+			} else {
+				// set file to main parameters of base logger
+				writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
+				log.writer = &writer
+			}
+		}
+
+		if procErrorMsg != "" {
+			_, err = io.WriteString(*log.writer, procErrorMsg)
+			if err != nil {
+				fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+			}
+		}
+
+		log.rmu.Unlock()
+		if err != nil {
+			fmt.Printf("Error while write log string \"%s\"; Error: %s\n", msg, err.Error())
+		}
+	} else {
+		// write message without conditions
+		log.rmu.Lock()
+		_, err := io.WriteString(*log.writer, msg)
+		log.rmu.Unlock()
+		if err != nil {
+			fmt.Printf("Error while write log string \"%s\"; Error: %s\n", msg, err.Error())
+		}
 	}
 }
 
@@ -183,9 +276,7 @@ func writeLogSync(w *io.Writer, t time.Time, s string) {
 func (log *LoggerSync) OutDebug(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(DebugLvl) && log.fLogRun {
-		log.rmu.Lock()
-		writeLogSync(log.writer, time.Now(), "[DBG]: "+msg)
-		log.rmu.Unlock()
+		log.writeLogSync(time.Now(), "[DBG]: "+msg)
 	}
 }
 
@@ -193,9 +284,7 @@ func (log *LoggerSync) OutDebug(msg string) {
 func (log *LoggerSync) OutInfo(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(InfoLvl) && log.fLogRun {
-		log.rmu.Lock()
-		writeLogSync(log.writer, time.Now(), "[INF]: "+msg)
-		log.rmu.Unlock()
+		log.writeLogSync(time.Now(), "[INF]: "+msg)
 	}
 }
 
@@ -203,9 +292,7 @@ func (log *LoggerSync) OutInfo(msg string) {
 func (log *LoggerSync) OutWarning(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(WarningLvl) && log.fLogRun {
-		log.rmu.Lock()
-		writeLogSync(log.writer, time.Now(), "[WRN]: "+msg)
-		log.rmu.Unlock()
+		log.writeLogSync(time.Now(), "[WRN]: "+msg)
 	}
 }
 
@@ -213,18 +300,14 @@ func (log *LoggerSync) OutWarning(msg string) {
 func (log *LoggerSync) OutError(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(ErrorLvl) && log.fLogRun {
-		log.rmu.Lock()
-		writeLogSync(log.writer, time.Now(), "[ERR]: "+msg)
-		log.rmu.Unlock()
+		log.writeLogSync(time.Now(), "[ERR]: "+msg)
 	}
 }
 
 // always out string into log
 func (log *LoggerSync) Out(msg string) {
 	if log.fLogRun {
-		log.rmu.Lock()
-		writeLogSync(log.writer, time.Now(), "[MSG]: "+msg)
-		log.rmu.Unlock()
+		log.writeLogSync(time.Now(), "[MSG]: "+msg)
 	}
 
 }
@@ -234,3 +317,5 @@ func (log *LoggerSync) Out(msg string) {
 func createMsg(t time.Time, s string) string {
 	return  (t.Format("2006-01-02 15:04:05.000") + " -> " + s + "\n")
 }
+
+//
