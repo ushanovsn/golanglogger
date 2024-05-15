@@ -178,9 +178,12 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 	if (log.param.fileMbSize > 0 || log.param.fileDaySize > 0) && log.param.logFile != nil {
 		// if exists file control conditions - need to check it
 		var fileChange bool
+		// error holder, when can't write in file
 		var procErrorMsg string
+		// error
 		var err error
 		
+		// blocking another log writing
 		log.rmu.Lock()
 
 		// file duration control check first
@@ -188,86 +191,99 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 			// current time zone offset
 			_, zOffset := time.Now().In(time.Local).Zone()
 			// check file time duration
-			fileChange, _ = checkFileTime(zOffset,log.param.fileOutPath,log.param.fileDaySize)
-		}
+			fileChange, _ = checkFileTime(zOffset, log.param.fileOutPath, log.param.fileDaySize)
 
-		if fileChange {
-			log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
-			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
-				writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
-				log.writer = &writer
-			} else {
-				// set file to main parameters of base logger
-				writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
-				log.writer = &writer
+			// when need to change file what duration is full
+			if fileChange {
+				// change file directly
+				log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
+				if err != nil {
+					procErrorMsg = fmt.Sprintf("Error while changing log file by time. Err: %s", err.Error())
+					// new writer wo file out
+					writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
+					log.writer = &writer
+				} else {
+					// new writer into new file - set file to main parameters of base logger
+					writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
+					log.writer = &writer
+				}
+
+				if procErrorMsg != "" {
+					_, err = io.WriteString(*log.writer, procErrorMsg)
+					if err != nil {
+						fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+					}
+
+					// skip error for use it after
+					procErrorMsg = ""
+				}
+
+				// skip flag for use it after
+				fileChange = false
 			}
 		}
 
-		if procErrorMsg != "" {
-			_, err = io.WriteString(*log.writer, procErrorMsg)
-			if err != nil {
-				fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
-			}
-		}
-
+		// writing log
 		_, err = io.WriteString(*log.writer, msg)
 		if err != nil {
-			fmt.Printf("Not logged ERROR: %s, for MESSAGE: %s", err, msg)
+			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg)
 		}
 
 		// check file MB size control enabled after writing new message
 		if log.param.fileMbSize > 0 && log.param.logFile != nil {
 			f, err := getFileMbSize(log.param.fileOutPath)
 			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while changing log file by size at time (%v). Err: %s", time.Now(), err.Error())
+				procErrorMsg = fmt.Sprintf("Error while get file size. Err: %s", err.Error())
 			}
 
 			if procErrorMsg != "" {
+				// error when check file size
 				_, err = io.WriteString(*log.writer, procErrorMsg)
 				if err != nil {
-					fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+					fmt.Printf("Not logged ERROR when get file size: %s, for MESSAGE: %s", err, procErrorMsg)
 				}
 			} else {
-				// when file is too big - generate cmd for change it
+				// when file is too big - need to change it
 				if f >= log.param.fileMbSize {
 					fileChange = true
 				}
+
+				if fileChange {
+					// change file directly
+					log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
+					if err != nil {
+						procErrorMsg = fmt.Sprintf("Error while changing log file by size. Err: %s", err.Error())
+						// new writer wo file out
+						writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
+						log.writer = &writer
+					} else {
+						// new writer into new file - set file to main parameters of base logger
+						writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
+						log.writer = &writer
+					}
+	
+					if procErrorMsg != "" {
+						_, err = io.WriteString(*log.writer, procErrorMsg)
+						if err != nil {
+							fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+						}
+					}
+				}
 			}
 		}
 
-
-		if fileChange {
-			log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
-			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
-				writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
-				log.writer = &writer
-			} else {
-				// set file to main parameters of base logger
-				writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
-				log.writer = &writer
-			}
-		}
-
-		if procErrorMsg != "" {
-			_, err = io.WriteString(*log.writer, procErrorMsg)
-			if err != nil {
-				fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
-			}
-		}
-
+		// unlock accef to log writing
 		log.rmu.Unlock()
-		if err != nil {
-			fmt.Printf("Error while write log string \"%s\"; Error: %s\n", msg, err.Error())
-		}
+
 	} else {
 		// write message without conditions
 		log.rmu.Lock()
 		_, err := io.WriteString(*log.writer, msg)
 		log.rmu.Unlock()
+
+		// write error into console
 		if err != nil {
-			fmt.Printf("Error while write log string \"%s\"; Error: %s\n", msg, err.Error())
+			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg)
 		}
 	}
 }
