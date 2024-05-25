@@ -14,8 +14,6 @@ type LoggerSync struct {
 	rmu *sync.RWMutex
 	// logger parameters
 	param *logParam
-	// logger channel
-	cCancel chan struct{}
 	// logger running flag
 	fLogRun bool
 	// logger multiwriter
@@ -45,8 +43,12 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 		}
 	}
 
+	// set result writer
+	writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
+	log.writer = &writer
+
 	// the greeting line after logger was created
-	log.Out("Logger starting w log level = " + log.param.logLvl.Name())
+	log.Out("Logger (sync) starting w log level = " + log.param.logLvl.Name())
 
 
 	return &log
@@ -55,11 +57,15 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 
 // stopping logger
 func (log *LoggerSync) StopLog() {
-	log.Out("Logger stopping by command \"STOP\"")
+	log.Out("Logger (sync) stopping by command \"STOP\"")
 
 	log.rmu.Lock()
 	log.fLogRun = false
 	log.rmu.Unlock()
+
+	// just line for visual control
+	_, _ = io.WriteString(*log.writer, "********************************************************************************************\n\n\n")
+
 
 	// now logger stopped
 
@@ -191,7 +197,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 			// current time zone offset
 			_, zOffset := time.Now().In(time.Local).Zone()
 			// check file time duration
-			fileChange, _ = checkFileTime(zOffset, log.param.fileOutPath, log.param.fileDaySize)
+			fileChange, _ = checkFileTime(zOffset, log.param.fileOutPath, (log.param.fileDaySize * secondInDay))
 
 			// when need to change file what duration is full
 			if fileChange {
@@ -243,6 +249,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 					fmt.Printf("Not logged ERROR when get file size: %s, for MESSAGE: %s", err, procErrorMsg)
 				}
 			} else {
+
 				// when file is too big - need to change it
 				if f >= log.param.fileMbSize {
 					fileChange = true
@@ -333,5 +340,3 @@ func (log *LoggerSync) Out(msg string) {
 func createMsg(t time.Time, s string) string {
 	return  (t.Format("2006-01-02 15:04:05.000") + " -> " + s + "\n")
 }
-
-//

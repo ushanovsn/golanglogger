@@ -17,6 +17,10 @@ A new file will be created after the specified duration at about 00:00.
 ```Go
 log := golanglogger.New(golanglogger.DebugLvl, "test.log")
 ```
+for synchronous:
+```Go
+log := golanglogger.NewSync(golanglogger.DebugLvl, "test.log")
+```
 define logging level and file name for log, if log file name is empty - no loging to file
 
 2. At stop, need to stop a logger for writing out all buffered messages (and closing log-file):
