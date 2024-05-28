@@ -4,12 +4,15 @@ import (
 	"os"
 	"testing"
 	"time"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_New(t *testing.T) {
+	// logger type
+	var lType string
 	// values for testing
 	testLvls := []struct {
 		testName     string
@@ -75,22 +78,24 @@ func Test_New(t *testing.T) {
 		if v == 1 {
 			// creating logger
 			log = New(logLevel, logFileName)
+			lType = "async"
 			defer log.StopLog()
 		} else {
 			// creating logger
 			log = NewSync(logLevel, logFileName)
+			lType = "sync"
 			defer log.StopLog()
 		}
 
 
 
 		// check logger created
-		assert.NotNil(t, log, "Check logger exists")
+		assert.NotNil(t, log, fmt.Sprintf("Check %s logger exists", lType))
 		if log == nil {
 			t.Fatal()
 		}
 
-		t.Run("Check logger creating", func(t *testing.T) {
+		t.Run(fmt.Sprintf("Check %s logger creating", lType), func(t *testing.T) {
 			logCon, logErr, logFile := log.CurrentOutParams()
 			lvl := log.CurrentLevel()
 			assert.True(t, logCon, "Console out enabled")
@@ -110,7 +115,7 @@ func Test_New(t *testing.T) {
 		fileSizeAfter := f.Size()
 
 		for _, tt := range testLvls {
-			t.Run(tt.testName, func(t *testing.T) {
+			t.Run(lType+" - "+tt.testName, func(t *testing.T) {
 				// set level and check setted level
 				logLevel = tt.testLvlValue
 				log.SetLevel(logLevel)
