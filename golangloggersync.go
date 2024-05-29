@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-
 // logger object type
 type LoggerSync struct {
 	// logger mutex for param interactions
@@ -50,10 +49,8 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 	// the greeting line after logger was created
 	log.Out("Logger (sync) starting w log level = " + log.param.logLvl.Name())
 
-
 	return &log
 }
-
 
 // stopping logger
 func (log *LoggerSync) StopLog() {
@@ -65,7 +62,6 @@ func (log *LoggerSync) StopLog() {
 
 	// just line for visual control
 	_, _ = io.WriteString(*log.writer, "********************************************************************************************\n\n\n")
-
 
 	// now logger stopped
 
@@ -180,7 +176,7 @@ func (log *LoggerSync) CurrentFileControl() (mbSize int, daySize int) {
 func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 	// generate message
 	msg := createMsg(t, s)
-	
+
 	if (log.param.fileMbSize > 0 || log.param.fileDaySize > 0) && log.param.logFile != nil {
 		// if exists file control conditions - need to check it
 		var fileChange bool
@@ -188,7 +184,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 		var procErrorMsg string
 		// error
 		var err error
-		
+
 		// blocking another log writing
 		log.rmu.Lock()
 
@@ -268,7 +264,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 						writer := getWriter(log.param.fNoCon, log.param.fStdErr, log.param.logFile)
 						log.writer = &writer
 					}
-	
+
 					if procErrorMsg != "" {
 						_, err = io.WriteString(*log.writer, procErrorMsg)
 						if err != nil {
@@ -335,8 +331,7 @@ func (log *LoggerSync) Out(msg string) {
 
 }
 
-
 // combining message for log
 func createMsg(t time.Time, s string) string {
-	return  (t.Format("2006-01-02 15:04:05.000") + " -> " + s + "\n")
+	return (t.Format("2006-01-02 15:04:05.000") + " -> " + s + "\n")
 }

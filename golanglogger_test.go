@@ -1,10 +1,10 @@
 package golanglogger
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -61,7 +61,7 @@ func Test_New(t *testing.T) {
 		},
 	}
 
-	for _, v := range ([]int{1,2}){
+	for _, v := range []int{1, 2} {
 
 		// temp file
 		logFileName := uuid.NewString() + ".log"
@@ -71,7 +71,6 @@ func Test_New(t *testing.T) {
 		logLevel := DebugLvl
 		// delay for change control
 		tDur := time.Millisecond * 300
-
 
 		var log Golanglogger
 
@@ -86,8 +85,6 @@ func Test_New(t *testing.T) {
 			lType = "sync"
 			defer log.StopLog()
 		}
-
-
 
 		// check logger created
 		assert.NotNil(t, log, fmt.Sprintf("Check %s logger exists", lType))

@@ -22,7 +22,7 @@ type Golanglogger interface {
 	Out(msg string)
 	// set log level
 	SetLevel(LoggingLevel)
-	// set log file control parameters 
+	// set log file control parameters
 	SetFileParam(mbSize int, daySize int)
 	// set log channel buffer size
 	SetBufferSize(int)
