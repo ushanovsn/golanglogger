@@ -6,7 +6,8 @@ Logger module (project within of language learning)
 <!--Info block-->
 
 ## Use logger:
-Logger created as goroutine and will works in async mode.  Messages for log are transmitted through the channel with no zero buffer size.
+Asynchronous Logger created as goroutine and will works in async mode (logger implements "Golanglogger" interface).  Messages for log are transmitted through the channel with no zero buffer size. <br/>
+Synchronous Logger implements "Golanglogger" interface and work synchronous with app flow.
 
 File day size control works in another goroutine and check the time for period 60 sec (and check is performed in base logger when recording message every new day).
 It not enough accurate variant, but low count of file accesses (to prevent old logs from getting into the file, a time check is used for each writing).
@@ -16,9 +17,13 @@ A new file will be created after the specified duration at about 00:00.
 ```Go
 log := golanglogger.New(golanglogger.DebugLvl, "test.log")
 ```
+for synchronous:
+```Go
+log := golanglogger.NewSync(golanglogger.DebugLvl, "test.log")
+```
 define logging level and file name for log, if log file name is empty - no loging to file
 
-2. At stop, need to stop a logger for writing out all buffered messages:
+2. At stop, need to stop a logger for writing out all buffered messages (and closing log-file):
 ```Go
 defer log.StopLog()
 ```

@@ -10,19 +10,33 @@ import (
 
 // base logger interface
 type Golanglogger interface {
-	OutDebug(string)
-	OutInfo(string)
-	OutWarning(string)
-	OutError(string)
-	Out(string)
+	// out Debug string into log
+	OutDebug(msg string)
+	// out Info string into log
+	OutInfo(msg string)
+	// out Warning string into log
+	OutWarning(msg string)
+	// out Error string into log
+	OutError(msg string)
+	// always out string into log
+	Out(msg string)
+	// set log level
 	SetLevel(LoggingLevel)
-	SetFileParam(int, int)
+	// set log file control parameters
+	SetFileParam(mbSize int, daySize int)
+	// set log channel buffer size
 	SetBufferSize(int)
-	SetStdOut(bool, bool)
-	CurrentOutParams() (bool, bool, string)
-	CurrentBufSize() int
-	CurrentLevel() LoggingLevel
-	CurrentFileControl() (int, int)
+	// set log out writers parameters (con - console out flag, stdErr - standart error out flag)
+	SetStdOut(con bool, stdErr bool)
+	// get logger parameters for writing messages
+	CurrentOutParams() (con bool, stdErr bool, filePath string)
+	// get logger buffer size
+	CurrentBufSize() (size int)
+	// get logger level
+	CurrentLevel() (lvl LoggingLevel)
+	// get logger file control parameters
+	CurrentFileControl() (mbSize int, daySize int)
+	// stopping logger
 	StopLog()
 }
 
@@ -143,7 +157,6 @@ func (log *Logger) StopLog() {
 	}
 
 	log.param.logFile = nil
-	log.fLogRun = false
 }
 
 // set log level
@@ -155,7 +168,7 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 	log.Out("Set logging level = " + l.Name())
 }
 
-// set log level
+// set log channel buffer size
 func (log *Logger) SetBufferSize(bSize int) {
 	if bSize < minBufferSize || bSize > maxBufferSize {
 		log.OutError(fmt.Sprintf("Wrong buffer size: %d", bSize))
