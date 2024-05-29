@@ -22,6 +22,8 @@ type Golanglogger interface {
 	Out(msg string)
 	// set log level
 	SetLevel(LoggingLevel)
+	// set name of logger for write as prefix to log
+	SetName(nameStr string)
 	// set log file control parameters
 	SetFileParam(mbSize int, daySize int)
 	// set log channel buffer size
@@ -34,6 +36,8 @@ type Golanglogger interface {
 	CurrentBufSize() (size int)
 	// get logger level
 	CurrentLevel() (lvl LoggingLevel)
+	// get logger name
+	CurrentName() (nameStr string)
 	// get logger file control parameters
 	CurrentFileControl() (mbSize int, daySize int)
 	// stopping logger
