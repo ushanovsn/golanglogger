@@ -82,6 +82,10 @@ type logParam struct {
 	fileDaySize int
 	// delay for check file size function (in seconds)
 	checkFileTime int
+	// name of logger
+	name string
+	// constructed name prefix
+	namePref string
 }
 
 // logger object type
@@ -276,7 +280,17 @@ func (log *Logger) CurrentFileControl() (mbSize int, daySize int) {
 }
 
 // write logging mesage
-func writeLog(c chan logData, t time.Time, s string) {
+func writeLog(w *io.Writer, n string, d logData) error {
+	_, err := io.WriteString(*w, d.t + " -> " + n + d.msg + "\n")
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// send logging mesage
+func sendToLog(c chan logData, t time.Time, s string) {
 	c <- logData{t.Format("2006-01-02 15:04:05.000"), s, cmdWrite}
 }
 
@@ -289,7 +303,7 @@ func writeCmd(c chan<- logData, cmd loggingCmd) {
 func (log *Logger) OutDebug(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(DebugLvl) && log.fLogRun {
-		writeLog(log.logChan, time.Now(), "[DBG]: "+msg)
+		sendToLog(log.logChan, time.Now(), "[DBG]: "+msg)
 	}
 }
 
@@ -297,7 +311,7 @@ func (log *Logger) OutDebug(msg string) {
 func (log *Logger) OutInfo(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(InfoLvl) && log.fLogRun {
-		writeLog(log.logChan, time.Now(), "[INF]: "+msg)
+		sendToLog(log.logChan, time.Now(), "[INF]: "+msg)
 	}
 }
 
@@ -305,7 +319,7 @@ func (log *Logger) OutInfo(msg string) {
 func (log *Logger) OutWarning(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(WarningLvl) && log.fLogRun {
-		writeLog(log.logChan, time.Now(), "[WRN]: "+msg)
+		sendToLog(log.logChan, time.Now(), "[WRN]: "+msg)
 	}
 }
 
@@ -313,14 +327,14 @@ func (log *Logger) OutWarning(msg string) {
 func (log *Logger) OutError(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(ErrorLvl) && log.fLogRun {
-		writeLog(log.logChan, time.Now(), "[ERR]: "+msg)
+		sendToLog(log.logChan, time.Now(), "[ERR]: "+msg)
 	}
 }
 
 // always out string into log
 func (log *Logger) Out(msg string) {
 	if log.fLogRun {
-		writeLog(log.logChan, time.Now(), "[MSG]: "+msg)
+		sendToLog(log.logChan, time.Now(), "[MSG]: "+msg)
 	}
 
 }
