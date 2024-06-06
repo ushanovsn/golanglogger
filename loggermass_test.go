@@ -1,10 +1,10 @@
 package golanglogger
 
 import (
-	"os"
-	"testing"
-	"sync"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,7 +19,7 @@ func Test_OneLoggerOneFile(t *testing.T) {
 	// count of writing strings for each goroutine
 	strCnt := 10
 	// waiting goroutines
-	var grp  sync.WaitGroup
+	var grp sync.WaitGroup
 	// loger level
 	logLevel := DebugLvl
 	// logger type
@@ -27,12 +27,11 @@ func Test_OneLoggerOneFile(t *testing.T) {
 	// time for waiting writing async logger
 	tDur := time.Millisecond * 300
 	// finalize text size
-	var fSize  int64
+	var fSize int64
 	// string-text in log  size
-	var strSize  int
+	var strSize int
 
-
-	for _, v := range ([]int{1,2}){
+	for _, v := range []int{1, 2} {
 
 		// temp file
 		logFileName := uuid.NewString() + ".log"
@@ -45,15 +44,19 @@ func Test_OneLoggerOneFile(t *testing.T) {
 			log = New(logLevel, logFileName)
 			lType = "async"
 			// finalize text size for async logger
-			fSize = 228
+			fSize = int64(len("2024-06-06 22:46:08.946 -> [MSG]: Logger stopping by command \"STOP\"\n"))
+			fSize = fSize + int64(len("2024-06-06 23:06:51.876 -> [DBG]: Internal command for logger: 2\n"))
+			fSize = fSize + int64(len("2024-06-06 23:06:51.876 -> ********************************************************************************************\n"))
+			fSize = fSize + int64(len("\n\n\n"))
 		} else {
 			// creating logger
 			log = NewSync(logLevel, logFileName)
 			lType = "sync"
 			// finalize text size for sync logger
-			fSize = 170
+			fSize = int64(len("2024-06-06 22:46:08.946 -> [MSG]: Logger (sync) stopping by command \"STOP\"\n"))
+			fSize = fSize + int64(len("2024-06-06 22:46:08.946 -> [MSG]: ********************************************************************************************\n"))
+			fSize = fSize + int64(len("\n\n\n"))
 		}
-
 
 		// check logger created
 		if v == 1 {
@@ -93,19 +96,19 @@ func Test_OneLoggerOneFile(t *testing.T) {
 		fileSizeBefore := f.Size()
 
 		// starting tests
-		for i:= 0; i<cnt; i++ {
+		for i := 0; i < cnt; i++ {
 			grp.Add(1)
-			go func(k int){
-				for j:=k*strCnt;j<(k+1)*strCnt;j++ {
+			go func(k int) {
+				for j := k * strCnt; j < (k+1)*strCnt; j++ {
 					log.OutDebug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
 				}
 				grp.Done()
 			}(i)
 		}
-		// string-text in log size for current message
-		strSize = 63
 		grp.Wait()
 		log.StopLog()
+		// string-text in log size for current message
+		strSize = len("2024-06-06 22:46:08.945 -> [DBG]: ") + len(fmt.Sprintf("Logger: %3d. Value %9d", 0, 0)) + len("\n")
 
 		f, err = os.Stat(logFileName)
 		assert.NoError(t, err, "Fix starting file size")
@@ -120,9 +123,6 @@ func Test_OneLoggerOneFile(t *testing.T) {
 	}
 }
 
-
-
-
 func Test_MultyLoggerOneFile(t *testing.T) {
 	// values for testing
 
@@ -131,7 +131,7 @@ func Test_MultyLoggerOneFile(t *testing.T) {
 	// count of writing strings for each goroutine
 	strCnt := 10
 	// waiting goroutines
-	var grp  sync.WaitGroup
+	var grp sync.WaitGroup
 	// loger level
 	logLevel := DebugLvl
 	// logger type
@@ -139,12 +139,11 @@ func Test_MultyLoggerOneFile(t *testing.T) {
 	// time for waiting writing async logger
 	tDur := time.Millisecond * 300
 	// finalize text size
-	var fSize  int64
+	var fSize int64
 	// string-text in log  size
-	var strSize  int
+	var strSize int
 
-
-	for _, v := range ([]int{1,2}){
+	for _, v := range []int{1, 2} {
 
 		// temp file
 		logFileName := uuid.NewString() + ".log"
@@ -157,15 +156,19 @@ func Test_MultyLoggerOneFile(t *testing.T) {
 			log = New(logLevel, logFileName)
 			lType = "async"
 			// finalize text size for async logger
-			fSize = 228
+			fSize = int64(len("2024-06-06 22:46:08.946 -> [MSG]: Logger stopping by command \"STOP\"\n"))
+			fSize = fSize + int64(len("2024-06-06 23:06:51.876 -> [DBG]: Internal command for logger: 2\n"))
+			fSize = fSize + int64(len("2024-06-06 23:06:51.876 -> ********************************************************************************************\n"))
+			fSize = fSize + int64(len("\n\n\n"))
 		} else {
 			// creating logger
 			log = NewSync(logLevel, logFileName)
 			lType = "sync"
 			// finalize text size for sync logger
-			fSize = 170
+			fSize = int64(len("2024-06-06 22:46:08.946 -> [MSG]: Logger (sync) stopping by command \"STOP\"\n"))
+			fSize = fSize + int64(len("2024-06-06 22:46:08.946 -> [MSG]: ********************************************************************************************\n"))
+			fSize = fSize + int64(len("\n\n\n"))
 		}
-
 
 		// check logger created
 		if v == 1 {
@@ -205,19 +208,19 @@ func Test_MultyLoggerOneFile(t *testing.T) {
 		fileSizeBefore := f.Size()
 
 		// starting tests
-		for i:= 0; i<cnt; i++ {
+		for i := 0; i < cnt; i++ {
 			grp.Add(1)
-			go func(k int, l Golanglogger){
-				for j:=k*strCnt;j<(k+1)*strCnt;j++ {
+			go func(k int, l Golanglogger) {
+				for j := k * strCnt; j < (k+1)*strCnt; j++ {
 					l.OutDebug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
 				}
 				grp.Done()
 			}(i, log)
 		}
-		// string-text in log size for current message
-		strSize = 63
 		grp.Wait()
 		log.StopLog()
+		// string-text in log size for current message
+		strSize = len("2024-06-06 22:46:08.945 -> [DBG]: ") + len(fmt.Sprintf("Logger: %3d. Value %9d", 0, 0)) + len("\n")
 
 		f, err = os.Stat(logFileName)
 		assert.NoError(t, err, "Fix starting file size")
