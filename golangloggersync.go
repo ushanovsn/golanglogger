@@ -55,13 +55,11 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 // stopping logger
 func (log *LoggerSync) StopLog() {
 	log.Out("Logger (sync) stopping by command \"STOP\"")
+	log.Out("********************************************************************************************\n\n\n")
 
 	log.rmu.Lock()
 	log.fLogRun = false
 	log.rmu.Unlock()
-
-	// just line for visual control
-	_, _ = io.WriteString(*log.writer, "********************************************************************************************\n\n\n")
 
 	// now logger stopped
 
@@ -129,6 +127,18 @@ func (log *LoggerSync) SetStdOut(con bool, stdErr bool) {
 	log.rmu.Unlock()
 }
 
+// set log name
+func (log *LoggerSync) SetName(nameStr string) {
+	log.rmu.Lock()
+	log.param.name = nameStr
+	if nameStr == "" {
+		log.param.namePref = ""
+	} else {
+		log.param.namePref = nameStr + ": "
+	}
+	log.rmu.Unlock()
+}
+
 // get logger parameters for writing messages
 func (log *LoggerSync) CurrentOutParams() (con bool, stdErr bool, filePath string) {
 
@@ -172,16 +182,26 @@ func (log *LoggerSync) CurrentFileControl() (mbSize int, daySize int) {
 	return mbSize, daySize
 }
 
+// get logger level
+func (log *LoggerSync) CurrentName() (nameStr string) {
+
+	log.rmu.RLock()
+	nameStr = log.param.name
+	log.rmu.RUnlock()
+
+	return nameStr
+}
+
 // write logging mesage
 func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 	// generate message
-	msg := createMsg(t, s)
+	msg := logData{cmd: cmdWrite, t: t.Format(timeFormat), msg: s}
 
 	if (log.param.fileMbSize > 0 || log.param.fileDaySize > 0) && log.param.logFile != nil {
 		// if exists file control conditions - need to check it
 		var fileChange bool
 		// error holder, when can't write in file
-		var procErrorMsg string
+		var procErrorMsg logData
 		// error
 		var err error
 
@@ -200,7 +220,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 				// change file directly
 				log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
 				if err != nil {
-					procErrorMsg = fmt.Sprintf("Error while changing log file by time. Err: %s", err.Error())
+					procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while changing log file by time. Err: %s", err.Error()), time.Now().Format(timeFormat))
 					// new writer wo file out
 					writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
 					log.writer = &writer
@@ -210,14 +230,14 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 					log.writer = &writer
 				}
 
-				if procErrorMsg != "" {
-					_, err = io.WriteString(*log.writer, procErrorMsg)
+				if procErrorMsg.msg != "" {
+					err = writeLog(log.writer, log.param.namePref, procErrorMsg)
 					if err != nil {
-						fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+						fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg.msg)
 					}
 
 					// skip error for use it after
-					procErrorMsg = ""
+					procErrorMsg.reset()
 				}
 
 				// skip flag for use it after
@@ -226,24 +246,25 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 		}
 
 		// writing log
-		_, err = io.WriteString(*log.writer, msg)
+		err = writeLog(log.writer, log.param.namePref, msg)
 		if err != nil {
-			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg)
+			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg.msg)
 		}
 
 		// check file MB size control enabled after writing new message
 		if log.param.fileMbSize > 0 && log.param.logFile != nil {
 			f, err := getFileMbSize(log.param.fileOutPath)
 			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while get file size. Err: %s", err.Error())
+				procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while get file size. Err: %s", err.Error()), time.Now().Format(timeFormat))
 			}
 
-			if procErrorMsg != "" {
+			if procErrorMsg.msg != "" {
 				// error when check file size
-				_, err = io.WriteString(*log.writer, procErrorMsg)
+				err = writeLog(log.writer, log.param.namePref, procErrorMsg)
 				if err != nil {
-					fmt.Printf("Not logged ERROR when get file size: %s, for MESSAGE: %s", err, procErrorMsg)
+					fmt.Printf("Not logged ERROR when get file size: %s, for MESSAGE: %s", err, procErrorMsg.msg)
 				}
+				procErrorMsg.reset()
 			} else {
 
 				// when file is too big - need to change it
@@ -255,7 +276,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 					// change file directly
 					log.param.logFile, err = changeFile(log.param.logFile, log.param.fileOutPath, true)
 					if err != nil {
-						procErrorMsg = fmt.Sprintf("Error while changing log file by size. Err: %s", err.Error())
+						procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while changing log file by size. Err: %s", err.Error()), time.Now().Format(timeFormat))
 						// new writer wo file out
 						writer := getWriter(log.param.fNoCon, log.param.fStdErr, nil)
 						log.writer = &writer
@@ -265,11 +286,12 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 						log.writer = &writer
 					}
 
-					if procErrorMsg != "" {
-						_, err = io.WriteString(*log.writer, procErrorMsg)
+					if procErrorMsg.msg != "" {
+						err = writeLog(log.writer, log.param.namePref, procErrorMsg)
 						if err != nil {
-							fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg)
+							fmt.Printf("Not logged ERROR when changing file: %s, for MESSAGE: %s", err, procErrorMsg.msg)
 						}
+						procErrorMsg.reset()
 					}
 				}
 			}
@@ -281,12 +303,12 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 	} else {
 		// write message without conditions
 		log.rmu.Lock()
-		_, err := io.WriteString(*log.writer, msg)
+		err := writeLog(log.writer, log.param.namePref, msg)
 		log.rmu.Unlock()
 
 		// write error into console
 		if err != nil {
-			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg)
+			fmt.Printf("Not logged ERROR: %s, when writing MESSAGE: %s", err, msg.msg)
 		}
 	}
 }
@@ -329,9 +351,4 @@ func (log *LoggerSync) Out(msg string) {
 		log.writeLogSync(time.Now(), "[MSG]: "+msg)
 	}
 
-}
-
-// combining message for log
-func createMsg(t time.Time, s string) string {
-	return (t.Format("2006-01-02 15:04:05.000") + " -> " + s + "\n")
 }

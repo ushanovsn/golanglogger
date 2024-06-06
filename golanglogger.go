@@ -236,6 +236,20 @@ func (log *Logger) SetStdOut(con bool, stdErr bool) {
 	log.cmdOut(log.logChan, cmdReloadConf)
 }
 
+// set log name
+func (log *Logger) SetName(nameStr string) {
+	log.rmu.Lock()
+	log.param.name = nameStr
+	if nameStr == "" {
+		log.param.namePref = ""
+	} else {
+		log.param.namePref = nameStr + ": "
+	}
+	log.rmu.Unlock()
+	log.cmdOut(log.logChan, cmdReloadConf)
+	log.Out("Set logging name = " + nameStr)
+}
+
 // get logger parameters for writing messages
 func (log *Logger) CurrentOutParams() (con bool, stdErr bool, filePath string) {
 
@@ -279,9 +293,40 @@ func (log *Logger) CurrentFileControl() (mbSize int, daySize int) {
 	return mbSize, daySize
 }
 
+// get logger name
+func (log *Logger) CurrentName() (nameStr string) {
+
+	log.rmu.RLock()
+	nameStr = log.param.name
+	log.rmu.RUnlock()
+
+	return nameStr
+}
+
+// reset parameters in struct to default
+func (ld *logData) reset() {
+	ld.cmd = cmdIdle
+	ld.msg = ""
+	ld.t = ""
+}
+
+// set parameters in struct to value
+func (ld *logData) set(v logData) {
+	ld.cmd = v.cmd
+	ld.msg = v.msg
+	ld.t = v.t
+}
+
+// set parameters in struct to values
+func (ld *logData) setVal(cmd loggingCmd, msg string, t string) {
+	ld.cmd = cmd
+	ld.msg = msg
+	ld.t = t
+}
+
 // write logging mesage
 func writeLog(w *io.Writer, n string, d logData) error {
-	_, err := io.WriteString(*w, d.t + " -> " + n + d.msg + "\n")
+	_, err := io.WriteString(*w, d.t+" -> "+n+d.msg+"\n")
 
 	if err != nil {
 		return err
@@ -291,7 +336,7 @@ func writeLog(w *io.Writer, n string, d logData) error {
 
 // send logging mesage
 func sendToLog(c chan logData, t time.Time, s string) {
-	c <- logData{t.Format("2006-01-02 15:04:05.000"), s, cmdWrite}
+	c <- logData{t.Format(timeFormat), s, cmdWrite}
 }
 
 // write logging command
@@ -362,9 +407,9 @@ func logger(l *Logger) {
 	// current received command
 	var cmd loggingCmd = cmdIdle
 	// message what was generating error in cycle before
-	var lostLogMsg string
+	var lostLogMsg logData
 	// error while cmd processing
-	var procErrorMsg string
+	var procErrorMsg logData
 	// previous day value for control file time duration
 	var prepDay int
 	// time in seconds for control file duration
@@ -395,26 +440,26 @@ func logger(l *Logger) {
 		}
 
 		// check lost messages
-		if lostLogMsg != "" {
-			_, err := io.WriteString(writer, lostLogMsg+"\n")
+		if lostLogMsg.msg != "" {
+			err := writeLog(&writer, param.namePref, lostLogMsg)
 			if err != nil {
 				// when error - just do it again and again
-				fmt.Printf("Multiple ERROR while write log string \"%s\"; Error: %s\n", lostLogMsg, err.Error())
+				fmt.Printf("Multiple ERROR while write log string \"%s\"; Error: %s\n", lostLogMsg.msg, err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
-			lostLogMsg = ""
+			lostLogMsg.reset()
 		}
 		// check old errors
-		if procErrorMsg != "" {
-			_, err := io.WriteString(writer, procErrorMsg+"\n")
+		if procErrorMsg.msg != "" {
+			err := writeLog(&writer, param.namePref, procErrorMsg)
 			if err != nil {
 				// when error - just do it again and again
-				fmt.Printf("Multiple ERROR while write old error into log. Old error: \"%s\"; Current error: %s\n", procErrorMsg, err.Error())
+				fmt.Printf("Multiple ERROR while write old error into log. Old error: \"%s\"; Current error: %s\n", procErrorMsg.msg, err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
-			procErrorMsg = ""
+			procErrorMsg.reset()
 		}
 
 		// main cycle for getting data from channel cycle
@@ -432,16 +477,16 @@ func logger(l *Logger) {
 						if err != nil {
 							// need restart writers and reload config
 							// memorize message
-							lostLogMsg = msg.t + " -> " + msg.msg
+							lostLogMsg.set(msg)
 							// memorize error
-							procErrorMsg = fmt.Sprintf("Error while check log file time duration. Error: %s", err.Error())
+							procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while check log file time duration. Error: %s", err.Error()), time.Now().Format(timeFormat))
 							cmd = cmdReloadConf
 							break
 						}
 
 						// if time is already gone...
 						if fChange {
-							lostLogMsg = msg.t + " -> " + msg.msg
+							lostLogMsg.set(msg)
 							cmd = cmdChangeFile
 							break
 						}
@@ -449,13 +494,13 @@ func logger(l *Logger) {
 				}
 
 				// write log
-				_, err := io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
+				err := writeLog(&writer, param.namePref, msg)
 				if err != nil {
 					// need restart writers and reload config
 					// memorize message
-					lostLogMsg = msg.t + " -> " + msg.msg
+					lostLogMsg.set(msg)
 					// memorize error
-					procErrorMsg = fmt.Sprintf("Error while write log string \"%s\"; Error: %s", lostLogMsg, err.Error())
+					procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while write log string \"%s\"; Error: %s", lostLogMsg.msg, err.Error()), time.Now().Format(timeFormat))
 					cmd = cmdReloadConf
 					break
 				}
@@ -465,7 +510,7 @@ func logger(l *Logger) {
 					f, err := getFileMbSize(param.fileOutPath)
 					if err != nil {
 						// need restart writers and reload config
-						procErrorMsg = fmt.Sprintf("Error while getting File Mb Size; File: \"%s\"; Error: %s", param.fileOutPath, err.Error())
+						procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while getting File Mb Size; File: \"%s\"; Error: %s", param.fileOutPath, err.Error()), time.Now().Format(timeFormat))
 						cmd = cmdReloadConf
 						break
 					}
@@ -498,7 +543,7 @@ func logger(l *Logger) {
 			var err error
 			param.logFile, err = changeFile(param.logFile, param.fileOutPath, true)
 			if err != nil {
-				procErrorMsg = fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error())
+				procErrorMsg.setVal(cmdIdle, fmt.Sprintf("Error while changing log file at time (%v). Err: %s", time.Now(), err.Error()), time.Now().Format(timeFormat))
 			} else {
 				// set file to main parameters of base logger
 				l.rmu.Lock()
@@ -522,17 +567,18 @@ func logger(l *Logger) {
 				// received message:
 				if msg.cmd == cmdWrite {
 					// write log as can
-					_, _ = io.WriteString(writer, msg.t+" -> "+msg.msg+"\n")
+					_ = writeLog(&writer, param.namePref, msg)
 				}
 			}
 			// just line for visual control
-			_, _ = io.WriteString(writer, "********************************************************************************************\n\n\n")
+			_ = writeLog(&writer, param.namePref, logData{cmd: cmdIdle, t: time.Now().Format(timeFormat), msg: "********************************************************************************************\n\n\n"})
 			return
 		}
 
 		// check errors msg and emergency write it into console
-		if procErrorMsg != "" {
-			fmt.Printf("No logged Error:  \"%s\"\n", procErrorMsg)
+		if procErrorMsg.msg != "" {
+			fmt.Printf("No logged Error:  \"%s\"\n", procErrorMsg.msg)
+			procErrorMsg.reset()
 		}
 	}
 }

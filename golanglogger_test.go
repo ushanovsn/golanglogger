@@ -93,6 +93,13 @@ func Test_New(t *testing.T) {
 		}
 
 		t.Run(fmt.Sprintf("Check %s logger creating", lType), func(t *testing.T) {
+			// test name Logger
+			loggerName := "testLogger"
+			assert.NotEqual(t, loggerName, log.CurrentName(), "Logger file name notequals")
+			log.SetName(loggerName)
+			assert.Equal(t, loggerName, log.CurrentName(), "Logger file name equals")
+
+			// test another params
 			logCon, logErr, logFile := log.CurrentOutParams()
 			lvl := log.CurrentLevel()
 			assert.True(t, logCon, "Console out enabled")

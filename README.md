@@ -35,6 +35,12 @@ defer log.StopLog()
     log.SetLevel(golanglogger.ErrorLvl)
     ```
 
+    * Change logger name:
+    ```Go
+    log.SetName("Iam LOGGER!")
+    ```
+    The name is writing as a prefix (after time and before log level) of the output log message
+
     * Change buffer size (default value: 20):
     ```Go
     log.SetBufferSize(100)
