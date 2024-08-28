@@ -78,6 +78,8 @@ func (log *LoggerSync) SetLevel(l LoggingLevel) {
 	log.rmu.Lock()
 	log.param.logLvl = l
 	log.rmu.Unlock()
+
+	log.Out("Set logging level = " + l.Name())
 }
 
 // set log channel buffer size
