@@ -11,13 +11,13 @@ import (
 // base logger interface
 type Golanglogger interface {
 	// out Debug string into log
-	OutDebug(msg string)
+	Debug(msg string)
 	// out Info string into log
-	OutInfo(msg string)
+	Info(msg string)
 	// out Warning string into log
-	OutWarning(msg string)
+	Warn(msg string)
 	// out Error string into log
-	OutError(msg string)
+	Error(msg string)
 	// always out string into log
 	Out(msg string)
 	// set log level
@@ -144,7 +144,7 @@ func (log *Logger) start() {
 	// the greeting line after logger was started
 	log.Out("Logger starting w log level = " + log.param.logLvl.Name())
 	if err != nil {
-		log.OutError("Error while init log-file: " + err.Error())
+		log.Error("Error while init log-file: " + err.Error())
 	}
 }
 
@@ -179,7 +179,7 @@ func (log *Logger) SetLevel(l LoggingLevel) {
 // set log channel buffer size
 func (log *Logger) SetBufferSize(bSize int) {
 	if bSize < minBufferSize || bSize > maxBufferSize {
-		log.OutError(fmt.Sprintf("Wrong buffer size: %d", bSize))
+		log.Error(fmt.Sprintf("Wrong buffer size: %d", bSize))
 		return
 	}
 
@@ -202,11 +202,11 @@ func (log *Logger) SetBufferSize(bSize int) {
 // set log file control parameters
 func (log *Logger) SetFileParam(mbSize int, daySize int) {
 	if mbSize < 0 {
-		log.OutError(fmt.Sprintf("Wrong file size control value: %d", mbSize))
+		log.Error(fmt.Sprintf("Wrong file size control value: %d", mbSize))
 		return
 	}
 	if daySize < 0 {
-		log.OutError(fmt.Sprintf("Wrong day size for file control value: %d", daySize))
+		log.Error(fmt.Sprintf("Wrong day size for file control value: %d", daySize))
 		return
 	}
 
@@ -215,7 +215,7 @@ func (log *Logger) SetFileParam(mbSize int, daySize int) {
 	log.param.fileDaySize = daySize
 	log.rmu.Unlock()
 
-	log.OutDebug(fmt.Sprintf("Logger will restart with new file parameters: %d Mb size, %d days duration", mbSize, daySize))
+	log.Debug(fmt.Sprintf("Logger will restart with new file parameters: %d Mb size, %d days duration", mbSize, daySize))
 	log.cmdOut(log.logChan, cmdReloadConf)
 }
 
@@ -223,7 +223,7 @@ func (log *Logger) SetFileParam(mbSize int, daySize int) {
 func (log *Logger) SetStdOut(con bool, stdErr bool) {
 
 	if !con && !stdErr {
-		log.OutError("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
+		log.Error("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
 		return
 	}
 
@@ -232,7 +232,7 @@ func (log *Logger) SetStdOut(con bool, stdErr bool) {
 	log.param.fStdErr = stdErr
 	log.rmu.Unlock()
 
-	log.OutDebug("Logger will restart with new outs parameters")
+	log.Debug("Logger will restart with new outs parameters")
 	log.cmdOut(log.logChan, cmdReloadConf)
 }
 
@@ -345,7 +345,7 @@ func writeCmd(c chan<- logData, cmd loggingCmd) {
 }
 
 // out Debug string into log
-func (log *Logger) OutDebug(msg string) {
+func (log *Logger) Debug(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(DebugLvl) && log.fLogRun {
 		sendToLog(log.logChan, time.Now(), "[DBG]: "+msg)
@@ -353,7 +353,7 @@ func (log *Logger) OutDebug(msg string) {
 }
 
 // out Info string into log
-func (log *Logger) OutInfo(msg string) {
+func (log *Logger) Info(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(InfoLvl) && log.fLogRun {
 		sendToLog(log.logChan, time.Now(), "[INF]: "+msg)
@@ -361,7 +361,7 @@ func (log *Logger) OutInfo(msg string) {
 }
 
 // out Warning string into log
-func (log *Logger) OutWarning(msg string) {
+func (log *Logger) Warn(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(WarningLvl) && log.fLogRun {
 		sendToLog(log.logChan, time.Now(), "[WRN]: "+msg)
@@ -369,7 +369,7 @@ func (log *Logger) OutWarning(msg string) {
 }
 
 // out Error string into log
-func (log *Logger) OutError(msg string) {
+func (log *Logger) Error(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(ErrorLvl) && log.fLogRun {
 		sendToLog(log.logChan, time.Now(), "[ERR]: "+msg)
@@ -387,7 +387,7 @@ func (log *Logger) Out(msg string) {
 // send command to logger
 func (log *Logger) cmdOut(c chan<- logData, cmd loggingCmd) {
 	if log.fLogRun {
-		log.OutDebug(fmt.Sprintf("Internal command for logger: %d", cmd))
+		log.Debug(fmt.Sprintf("Internal command for logger: %d", cmd))
 		writeCmd(c, cmd)
 	}
 
@@ -596,7 +596,7 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 	checkTime := l.param.checkFileTime
 	l.rmu.RUnlock()
 
-	l.OutDebug(fmt.Sprintf("Time control starting for control log file duration: %d days", (daySize / secondInDay)))
+	l.Debug(fmt.Sprintf("Time control starting for control log file duration: %d days", (daySize / secondInDay)))
 
 	// base cycle for control duration
 	for {
@@ -605,7 +605,7 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 		fChange, err := checkFileTime(zOffset, filePath, daySize)
 
 		if err != nil {
-			l.OutError("Log time control will stopped. Error while getting datetime creating of file. Err: " + err.Error())
+			l.Error("Log time control will stopped. Error while getting datetime creating of file. Err: " + err.Error())
 			return
 		}
 
@@ -620,7 +620,7 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 			if fRun {
 				select {
 				case <-cCancel:
-					l.OutDebug("Time control stopping by signal \"STOP\"")
+					l.Debug("Time control stopping by signal \"STOP\"")
 					return
 				default:
 					l.cmdOut(l.logChan, cmdChangeFile)
@@ -632,7 +632,7 @@ func fileTimeControl(l *Logger, zOffset int, cCancel chan struct{}) {
 		// wait timers or signal to stop
 		select {
 		case <-cCancel:
-			l.OutDebug("Time control stopping by signal \"STOP\"")
+			l.Debug("Time control stopping by signal \"STOP\"")
 			return
 		case <-time.After(time.Duration(checkTime) * time.Second):
 			// period timer occured

@@ -38,7 +38,7 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 	if log.param.fileOutPath != "" {
 		log.param.logFile, err = getFileOut(log.param.fileOutPath)
 		if err != nil {
-			log.OutError("Error while init log-file: " + err.Error())
+			log.Error("Error while init log-file: " + err.Error())
 		}
 	}
 
@@ -94,11 +94,11 @@ func (log *LoggerSync) SetBufferSize(bSize int) {
 // set log file control parameters
 func (log *LoggerSync) SetFileParam(mbSize int, daySize int) {
 	if mbSize < 0 {
-		log.OutError(fmt.Sprintf("Wrong file size control value: %d", mbSize))
+		log.Error(fmt.Sprintf("Wrong file size control value: %d", mbSize))
 		return
 	}
 	if daySize < 0 {
-		log.OutError(fmt.Sprintf("Wrong day size for file control value: %d", daySize))
+		log.Error(fmt.Sprintf("Wrong day size for file control value: %d", daySize))
 		return
 	}
 
@@ -107,18 +107,18 @@ func (log *LoggerSync) SetFileParam(mbSize int, daySize int) {
 	log.param.fileDaySize = daySize
 	log.rmu.Unlock()
 
-	log.OutDebug(fmt.Sprintf("Logger set new file parameters: %d Mb size, %d days duration", mbSize, daySize))
+	log.Debug(fmt.Sprintf("Logger set new file parameters: %d Mb size, %d days duration", mbSize, daySize))
 }
 
 // set log out writers parameters (con - console out flag, stdErr - standart error out flag)
 func (log *LoggerSync) SetStdOut(con bool, stdErr bool) {
 
 	if !con && !stdErr {
-		log.OutError("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
+		log.Error("Error parameter for out log. Received STDOUT and STDERR false for both. Skip this.")
 		return
 	}
 
-	log.OutDebug("Logger will works with new outs parameters")
+	log.Debug("Logger will works with new outs parameters")
 
 	writer := getWriter(!con, stdErr, log.param.logFile)
 
@@ -316,7 +316,7 @@ func (log *LoggerSync) writeLogSync(t time.Time, s string) {
 }
 
 // out Debug string into log
-func (log *LoggerSync) OutDebug(msg string) {
+func (log *LoggerSync) Debug(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(DebugLvl) && log.fLogRun {
 		log.writeLogSync(time.Now(), "[DBG]: "+msg)
@@ -324,7 +324,7 @@ func (log *LoggerSync) OutDebug(msg string) {
 }
 
 // out Info string into log
-func (log *LoggerSync) OutInfo(msg string) {
+func (log *LoggerSync) Info(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(InfoLvl) && log.fLogRun {
 		log.writeLogSync(time.Now(), "[INF]: "+msg)
@@ -332,7 +332,7 @@ func (log *LoggerSync) OutInfo(msg string) {
 }
 
 // out Warning string into log
-func (log *LoggerSync) OutWarning(msg string) {
+func (log *LoggerSync) Warn(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(WarningLvl) && log.fLogRun {
 		log.writeLogSync(time.Now(), "[WRN]: "+msg)
@@ -340,7 +340,7 @@ func (log *LoggerSync) OutWarning(msg string) {
 }
 
 // out Error string into log
-func (log *LoggerSync) OutError(msg string) {
+func (log *LoggerSync) Error(msg string) {
 	// don't use mutex, the level will  changing rare and it not important if reading old or new value of it
 	if int(log.param.logLvl) <= int(ErrorLvl) && log.fLogRun {
 		log.writeLogSync(time.Now(), "[ERR]: "+msg)

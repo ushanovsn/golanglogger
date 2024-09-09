@@ -58,10 +58,10 @@ defer log.StopLog()
 4. Use writing log functions, for logging with necessary levels:
 ```Go
 log.Out("This write everithing, without level control")
-log.OutDebug("This write only when Debug level available")
-log.OutInfo("This write only when Info level available and lower")
-log.OutWarning("This write only when Warning level available and lower")
-log.OutError("This write only when Error level available and lower")
+log.Debug("This write only when Debug level available")
+log.Info("This write only when Info level available and lower")
+log.Warn("This write only when Warning level available and lower")
+log.Error("This write only when Error level available and lower")
 ```
 "Debug" is minimum level, "Error" is maximum
 

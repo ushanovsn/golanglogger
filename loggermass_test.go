@@ -100,7 +100,7 @@ func Test_OneLoggerOneFile(t *testing.T) {
 			grp.Add(1)
 			go func(k int) {
 				for j := k * strCnt; j < (k+1)*strCnt; j++ {
-					log.OutDebug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
+					log.Debug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
 				}
 				grp.Done()
 			}(i)
@@ -212,7 +212,7 @@ func Test_MultyLoggerOneFile(t *testing.T) {
 			grp.Add(1)
 			go func(k int, l Golanglogger) {
 				for j := k * strCnt; j < (k+1)*strCnt; j++ {
-					l.OutDebug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
+					l.Debug(fmt.Sprintf("Logger: %3d. Value %9d", k, j))
 				}
 				grp.Done()
 			}(i, log)

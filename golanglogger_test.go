@@ -157,7 +157,7 @@ func Test_New(t *testing.T) {
 				// save file param
 				fileSizeBefore = fileSizeAfter
 				// write log
-				log.OutDebug("Test message: OutDebug")
+				log.Debug("Test message: OutDebug")
 				// wait untill messages writing
 				time.Sleep(tDur)
 				f, err = os.Stat(logFileName)
@@ -174,7 +174,7 @@ func Test_New(t *testing.T) {
 				// save file param
 				fileSizeBefore = fileSizeAfter
 				// write log
-				log.OutInfo("Test message: OutInfo")
+				log.Info("Test message: OutInfo")
 				// wait untill messages writing
 				time.Sleep(tDur)
 				f, err = os.Stat(logFileName)
@@ -191,7 +191,7 @@ func Test_New(t *testing.T) {
 				// save file param
 				fileSizeBefore = fileSizeAfter
 				// write log
-				log.OutWarning("Test message: OutWarning")
+				log.Warn("Test message: OutWarning")
 				// wait untill messages writing
 				time.Sleep(tDur)
 				f, err = os.Stat(logFileName)
@@ -208,7 +208,7 @@ func Test_New(t *testing.T) {
 				// save file param
 				fileSizeBefore = fileSizeAfter
 				// write log
-				log.OutError("Test message: OutError")
+				log.Error("Test message: OutError")
 				// wait untill messages writing
 				time.Sleep(tDur)
 				f, err = os.Stat(logFileName)
