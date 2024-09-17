@@ -10,9 +10,9 @@ import (
 // logger object type
 type LoggerSync struct {
 	// logger mutex for param interactions
-	rmu *sync.RWMutex
+	rmu sync.RWMutex
 	// logger parameters
-	param *logParam
+	param logParam
 	// logger running flag
 	fLogRun bool
 	// logger multiwriter
@@ -29,8 +29,6 @@ func NewSync(l LoggingLevel, filePath string) Golanglogger {
 	log.param.logLvl = l
 	// set received path
 	log.param.fileOutPath = filePath
-	// init log linking objects
-	log.rmu = &sync.RWMutex{}
 	// indicate logger started
 	log.fLogRun = true
 

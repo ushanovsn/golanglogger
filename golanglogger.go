@@ -91,13 +91,13 @@ type logParam struct {
 // logger object type
 type Logger struct {
 	// logger mutex for param interactions
-	rmu *sync.RWMutex
+	rmu sync.RWMutex
 	// logger parameters
-	param *logParam
+	param logParam
 	// logger channel
 	logChan chan logData
 	// logger counter
-	wg *sync.WaitGroup
+	wg sync.WaitGroup
 	// logger running flag
 	fLogRun bool
 }
@@ -111,9 +111,6 @@ func New(l LoggingLevel, filePath string) Golanglogger {
 	log.param.logLvl = l
 	// set received path
 	log.param.fileOutPath = filePath
-	// init log linking objects
-	log.wg = &sync.WaitGroup{}
-	log.rmu = &sync.RWMutex{}
 
 	log.start()
 
@@ -419,7 +416,7 @@ func logger(l *Logger) {
 	for {
 		// parameters copy
 		l.rmu.RLock()
-		param = *l.param
+		param = l.param
 		l.rmu.RUnlock()
 
 		// current time zone offset
